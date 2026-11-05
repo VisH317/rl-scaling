@@ -1,0 +1,22 @@
+phase1_anchor   (/home/vt7993/rl-scaling-refactor/experiments/phase1_anchor.yaml)
+  dataset   antmaze-medium-stitch-v0  size 1,000,000
+  axes      agent=['crl', 'gcbc']  depth=[4]
+  seeds     [0, 1, 2]
+  runs      6
+  critic    binary_nce / dot / lse=0.0 / ensemble=2 / repr_dim=512
+  actor     ddpgbc  alpha=0.1  discount=0.99  p_trajgoal={0.5,1.0}/p_randomgoal={0.0,0.5}
+  arch      ogbench_mlp  width=512  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch=1024  [BASELINE]
+  train     step_cap=1,000,000  plateau>=1,000,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  run_id                                                         agent   d seed
+  phase1_anchor__crl__d4__n1000000__s0__e2b4cdd4                 crl     4    0
+  phase1_anchor__crl__d4__n1000000__s1__717fe2b1                 crl     4    1
+  phase1_anchor__crl__d4__n1000000__s2__965db516                 crl     4    2
+  phase1_anchor__gcbc__d4__n1000000__s0__58179f22                gcbc    4    0
+  phase1_anchor__gcbc__d4__n1000000__s1__a1d4e5f2                gcbc    4    1
+  phase1_anchor__gcbc__d4__n1000000__s2__483e2477                gcbc    4    2
+
+(nothing written -- add --write to generate configs, --submit to also queue)

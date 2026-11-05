@@ -1,0 +1,29 @@
+interp01   (/home/vt7993/rl-scaling-refactor/src/offline/evals/evals.yaml)
+  grids     ['phase1_repro']   agents ['crl']   depths [4, 8, 16, 32]
+  select    reeval  checkpoint=<sel>
+  output    /scratch/gpfs/vt7993/rl-scaling/experiments/analysis/evals/interp01
+  tasks     3
+
+  eval               d seed   select  rule              spread  run_id
+  critic_heatmap     4    1    0.444  reeval@50          0.236  phase1_repro__crl__d4__n1000000__s1__acdde8ae
+  critic_heatmap     8    2    0.580  reeval@50          0.064  phase1_repro__crl__d8__n1000000__s2__43511f71
+  critic_heatmap    16    2    0.904  reeval@50          0.184  phase1_repro__crl__d16__n1000000__s2__c674fc85
+
+  seeds not picked (the spread is as real as the depth effect):
+    d4   {'1': 0.444, '0': 0.376, '2': 0.208}
+    d8   {'2': 0.58, '0': 0.544, '1': 0.516}
+    d16  {'2': 0.904, '0': 0.728, '1': 0.72}
+
+  not run:
+    critic_heatmap: phase1_repro crl d32 -- no scorable run
+    state_probes: disabled in evals.yaml
+
+  cost      <cost>
+            Job wall limit 03:00:00 = 3 x the longest eval's cap. That is a CAP, not an estimate;
+            each task records its real `secs` in meta.json, which is what to calibrate from.
+
+  evals on disk:
+    [x] critic_heatmap   ready    Critic value field over the maze, under the policy's own action
+    [ ] state_probes     planned  What the critic's representations linearly encode about the state
+
+(nothing written -- add --write to generate task files, --submit to also queue)
