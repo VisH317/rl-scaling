@@ -1,0 +1,43 @@
+# Linear probes on the critic's representations. PLANNED -- see README.md.
+# `src/eval.py` resolves this eval and prints it in the plan, but refuses to submit
+# it, naming this file. Nothing here has been run.
+name: state_probes
+title: What the critic's representations linearly encode about the state
+status: planned
+doc: README.md
+module: impl
+figures: null
+
+applies_to: [crl]
+requires: [critic]
+env_family: [locomaze]
+
+params:
+  state_source: val
+  # --- what is probed -------------------------------------------------------
+  sites: [psi_goal, phi_state_action]   # +block_k once activation capture exists
+  # --- what it is probed FOR ------------------------------------------------
+  targets:
+    - xy                 # regression. Dims 0:2 of the observation -- a LEAK CHECK,
+                         #   not a result: anything that keeps the input scores 1.0.
+    - maze_cell          # 26-way classification. Chance = largest-class frequency.
+    - geodesic_to_task   # regression, one column per task goal. The headline.
+    - steps_to_goal      # regression. Remaining steps to the trajectory's own end.
+    - torso_z            # regression. Control: a non-spatial body coordinate.
+    - joint_vel_norm     # regression. Control: should NOT improve with depth.
+  # --- method ---------------------------------------------------------------
+  split: trajectory      # NEVER `state`: neighbouring states are near-duplicates
+  n_train_trajs: 400
+  n_test_trajs: 100
+  ridge_lambdas: [1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 10.0, 100.0]
+  cv_folds: 5
+  standardize: true
+  # --- controls (each one is a separate fit; none is optional) --------------
+  baselines: [raw_obs, random_init, label_shuffle]
+  seed: 0
+
+resources:
+  time_limit: "01:00:00"
+  cpus: 8
+  mem_per_cpu: 4000M
+  gpu: 1

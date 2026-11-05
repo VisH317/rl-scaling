@@ -94,6 +94,15 @@ raise SystemExit(0 if ok else 1)
 EOF
 check $?
 
+step "3d. eval suite resolves, and every eval self-checks"
+$PY -m offline.evals.critic_heatmap.impl
+check $?
+$PY "$REPO/src/eval.py" --list
+check $?
+# The suite must resolve without a GPU: it only reads run configs and reeval tables.
+$PY "$REPO/src/eval.py" >/dev/null
+check $?
+
 step "4. mujoco env + EGL rendering"
 $PY - <<'EOF'
 import numpy as np, ogbench

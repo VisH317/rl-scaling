@@ -1,0 +1,34 @@
+# Critic value field over the maze. See README.md for what it measures and why.
+name: critic_heatmap
+title: Critic value field over the maze, under the policy's own action
+status: ready
+doc: README.md
+module: impl
+figures: figures
+
+# GCBC has no critic at all (`gcbc.py` builds only an actor), so this eval is
+# meaningless there rather than merely uninteresting. `src/eval.py` drops any
+# (agent, depth) point whose agent is not listed here, and says so.
+applies_to: [crl]
+requires: [critic, actor]
+# The field is spatial, so it only means anything in an environment with a maze map.
+env_family: [locomaze]
+
+params:
+  # --- what the critic is measured ON ---------------------------------------
+  state_source: val          # val | train.  val is held out; train is for the gap.
+  cell_subdiv: 4             # bins per maze cell per axis. 4 -> 1.0 world units/bin.
+  states_per_bin: 64         # real states sampled per bin (never synthesised)
+  min_states_per_bin: 8      # below this a bin is masked, in metrics and in figures
+  goal_samples: 8            # goal observations drawn per task (the goal is a
+                             # distribution: pose varies, xy varies by +/- unit/4)
+  action_sources: [policy, dataset]   # add `random` for a floor; costs one more sweep
+  # --- bookkeeping ----------------------------------------------------------
+  max_batch: 4096
+  seed: 0
+
+resources:
+  time_limit: "01:00:00"
+  cpus: 8
+  mem_per_cpu: 4000M
+  gpu: 1

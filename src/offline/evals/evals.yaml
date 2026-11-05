@@ -1,0 +1,43 @@
+# ===========================================================================
+# THE EVAL SUITE. One file; `src/eval.py` compiles it into a Slurm job.
+#
+#   $V src/eval.py                      # show the plan (nothing is written)
+#   $V src/eval.py --write              # write the task files
+#   $V src/eval.py --submit             # write + queue one job
+#   $V src/eval.py --figures            # rebuild figures from finished tasks
+#   $V src/eval.py --list               # every eval that exists, and its status
+#
+# Point it at a different suite file with a positional argument.
+# ===========================================================================
+
+name: interp01
+
+# --- which checkpoints the suite runs on -----------------------------------
+grids: [phase1_repro]            # grid names, as in experiments/*.yaml
+agents: [crl]                    # an eval that does not apply to an agent is dropped
+depths: [4, 8, 16, 32]
+
+# How the one checkpoint per (grid, agent, depth) is chosen:
+#   reeval        the 50-episodes/task rescore -- the number the report quotes
+#   best_success  the best training-time eval (15 episodes/task)
+#   last3         mean of the final three training evals
+#   all           no selection; every seed becomes its own task
+seed_select: reeval
+checkpoint: best                 # params_<checkpoint>.pkl
+
+# false also admits runs that are still training, scored from the tail of eval.csv
+# and labelled `in_flight@<step>` everywhere they appear. Use it to look early; never
+# to quote a number.
+require_finished: true
+
+# --- which evals to run ----------------------------------------------------
+# `params` here override that eval's own eval.yaml, key by key.
+evals:
+  - name: critic_heatmap
+    params:
+      cell_subdiv: 4
+      goal_samples: 8
+      action_sources: [policy, dataset]
+
+  - name: state_probes
+    enabled: false               # status: planned -- see its README.md
