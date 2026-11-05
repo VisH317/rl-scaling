@@ -163,9 +163,23 @@ def build_config(run_cfg: dict, base_config) -> dict:
             continue
         cfg[k] = v
 
-    # hidden_dims is what the shim reads `latent_dim` from; the residual tower's own
-    # depth/width come from `arch`, so the tuple length here is irrelevant except for
-    # its last element. Set a 1-tuple to make that explicit.
+    if arch.get("tower") == "ogbench_mlp":
+        # Anchor runs: leave OGBench's own architecture completely untouched, so a
+        # missed target can only be data/flags, never our networks.
+        dims = tuple(arch.get("ogbench_hidden_dims", (512, 512, 512)))
+        if "value_hidden_dims" in cfg:
+            cfg["value_hidden_dims"] = dims
+        if "actor_hidden_dims" in cfg:
+            cfg["actor_hidden_dims"] = dims
+        if "latent_dim" in cfg:
+            cfg["latent_dim"] = arch["repr_dim"]
+        return cfg
+
+    # For the residual tower, `hidden_dims` carries ONLY the head width: OGBench calls
+    # MLP((*hidden_dims, latent_dim)) and the shim takes hidden_dims[-1] as its output
+    # dim, so the last element is latent_dim and everything before it is unused. The
+    # tower's own depth and width come from `arch`. A 1-tuple makes that explicit --
+    # and means the stock 512-wide hidden layers are NOT silently applied.
     width = arch["width"]
     if "value_hidden_dims" in cfg:
         cfg["value_hidden_dims"] = (width,)

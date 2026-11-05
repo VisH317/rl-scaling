@@ -244,6 +244,8 @@ def main() -> int:
         best_success = -1.0
         best_step = 0
         evals_since_best = 0
+        best_smoothed = -1.0
+        recent: list[float] = []
         stop_reason = "cap_reached"
         periodic: list[int] = []
         deadline = _deadline()
@@ -301,23 +303,37 @@ def main() -> int:
                     "eval_secs": round(time.time() - t_eval, 1),
                 })
 
-                if success > best_success + tr["plateau_min_delta"]:
-                    best_success, best_step, evals_since_best = success, step, 0
+                # Best checkpoint still tracks the raw per-eval success -- that is the
+                # checkpoint phases 2 and 5 want.
+                if success > best_success:
+                    best_success, best_step = success, step
                     if ck["save_best"]:
                         save_agent(agent, os.path.join(run_dir, "checkpoints"), "best")
+
+                # The PLATEAU test runs on a moving average instead, because a single
+                # evaluation over 75 episodes is noisy enough to fake a plateau.
+                recent.append(success)
+                recent = recent[-tr["plateau_window"]:]
+                smoothed = float(np.mean(recent))
+                if smoothed > best_smoothed + tr["plateau_min_delta"]:
+                    best_smoothed, evals_since_best = smoothed, 0
                 else:
                     evals_since_best += 1
 
                 print(f"[{run_cfg['run_id']}] step {step:,}/{cap:,} "
                       f"success={success:.3f} best={best_success:.3f}@{best_step:,} "
-                      f"stale={evals_since_best}", flush=True)
+                      f"ma{tr['plateau_window']}={smoothed:.3f} stale={evals_since_best}",
+                      flush=True)
 
                 log.status(state="training", step=step, step_cap=cap,
                            best_success=best_success, best_step=best_step,
                            last_success=success, frac_done=round(step / cap, 4),
                            evals_since_best=evals_since_best)
 
-                if evals_since_best >= tr["plateau_patience"]:
+                # A floor on gradient steps: OGBench's published runs train for 1M,
+                # so stopping earlier is not comparable no matter how flat the curve is.
+                if (evals_since_best >= tr["plateau_patience"]
+                        and step >= tr.get("plateau_min_steps", 0)):
                     stop_reason = "plateau"
                     break
 
@@ -347,6 +363,9 @@ def main() -> int:
             "stop_reason": stop_reason,
             "best_success": best_success,
             "best_step": best_step,
+            # The published scoring convention: mean of the last 3 evaluations.
+            "last3_eval_mean": round(float(np.mean(recent)), 4) if recent else None,
+            "last3_evals": [round(v, 4) for v in recent],
             "final_step": step,
             "step_cap": cap,
             "gradient_steps": step,

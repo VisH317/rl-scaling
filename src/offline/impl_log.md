@@ -218,3 +218,51 @@ Two real blockers hit during submission, both now encoded in `config.py` with co
    `SlurmConfig.gpus_per_job` is now **2** → 6 runs/pack, 12 concurrent (not 24).
    Re-check `sinfo -p gpu` before raising it.
 
+### I14 — review feedback, six items · 2026-11-05
+
+**1. Published CRL flags — a real bug, now fixed.** Our CRL used `crl.py`'s bare defaults
+(`actor_p_trajgoal=1.0, actor_p_randomgoal=0.0`). OGBench's published command for this
+environment (`hyperparameters.sh` L166) is `0.5/0.5` with `alpha=0.1`. Verified verbatim.
+Material on a `stitch` dataset: stitching trajectory segments is the entire point, and
+trajectory-only actor goals never pose that problem. Added `PUBLISHED_FLAGS[(dataset,
+agent)]` in `config.py`, applied in `run_config()`, recorded per run as
+`published_flags`. GCBC confirmed to use bare defaults (L158), so its rows are unchanged.
+Cancelled the 12 in-flight runs and regenerated all configs — ~25 min of valid GCBC
+progress lost, against 12 CRL runs × ~12 h that would have used the wrong goal
+distribution.
+
+**2. `phase1_anchor` grid.** Stock OGBench architecture (3×512 GELU MLP, `latent_dim`
+512) via `tower="ogbench_mlp"`, which `patches.py` already supported as an opt-out;
+`build_config` now passes the stock dims through untouched when it is set. CRL + GCBC,
+3 seeds, 1M steps, published flags. 6 runs. Targets recorded in the grid's `note`:
+CRL 53±6, GCBC 45±11, scored as the mean of the last 3 evaluations.
+
+**3. Plateau rule.** `plateau_min_steps=1_000_000` floor (OGBench's published runs train
+for 1M, so stopping earlier is not comparable) and `plateau_window=3` moving average
+(single-eval success over 75 episodes is noisy enough to fake a plateau). Best-checkpoint
+saving still tracks the raw per-eval success — that is the checkpoint phases 2 and 5
+want. `summary.json` now also records `last3_eval_mean` and `last3_evals`.
+
+**4. `src/scripts/reeval.py`.** Restores `params_best.pkl` and re-scores at 50
+episodes/task (250 per run, the published count), alongside `last3_eval_mean` from
+`eval.csv`. Prints a mean±SD aggregate in the published `XX.X±Y.Y` form and writes JSON
+to `analysis/<grid>/reeval_50ep.json`.
+
+**5. Resolved head width — verified from a real checkpoint, not the config.**
+φ is `Dense(37→256)` → `4×(256→256)` → `Dense(256→64)`, with a leading ensemble dim of 2.
+So the head is 64 (`repr_dim`) and the **last hidden layer is still 256** (`arch.width`).
+`value_hidden_dims=(256,)` did not change it: OGBench builds `MLP((*hidden_dims,
+latent_dim))` and the shim reads only `hidden_dims[-1]`, so that tuple carries the head
+width and nothing else. Documented in `research_log.md` §1.10. The checkpoint also
+confirms the 2-critic ensemble and that Adam state is stored (resumable).
+
+**6. `src/scripts/goal_distribution.py`.** Measures the pile-up rather than estimating it.
+On antmaze-medium-stitch: **43.6%** of value goals are the trajectory's final state
+(mean distance 56.5), versus **2.5%** for actor goals — the effect is specific to the
+critic, because value goals use geometric sampling and actor goals uniform. Mechanism is
+`np.minimum(idxs + offsets, final_state_idxs)`: geometric offsets with mean 100 overshoot
+a 201-step trajectory and are clipped rather than resampled. Also measured on the grid
+task: cube-double-play is **10.1%** (1001-step trajectories), 4× lower. Logged in §1.8
+with the probe consequence: bin "goal == final state" separately, or it silently
+dominates the far-distance bins that H-horizon is about.
+

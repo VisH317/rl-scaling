@@ -306,7 +306,13 @@ class ArchConfig:
     init: Literal["lecun_uniform", "cold"] = "lecun_uniform"
     #: Residual towers are the point of the experiment; "mlp" reproduces the
     #: "standard architecture" control that collapsed with depth in the rebuttal.
-    tower: Literal["residual", "mlp"] = "residual"
+    #: "residual" = the 1000-layer tower. "mlp" = the same norm/activation placement
+    #: without skip connections (the rebuttal's collapsing control). "ogbench_mlp" =
+    #: leave OGBench's own MLP entirely alone -- used by the anchor grid to reproduce
+    #: published numbers, where our architecture must not be in the picture at all.
+    tower: Literal["residual", "mlp", "ogbench_mlp"] = "residual"
+    #: Only read when tower == "ogbench_mlp"; otherwise width/depth drive the tower.
+    ogbench_hidden_dims: tuple = (512, 512, 512)
 
     def __post_init__(self) -> None:
         if self.tower == "residual" and self.depth % self.block_size != 0:
@@ -314,6 +320,11 @@ class ArchConfig:
                 f"depth {self.depth} must be divisible by block_size {self.block_size}"
             )
 
+
+
+#: Stock OGBench architecture: 3x512 GELU MLP, post-activation LayerNorm, latent_dim 512.
+#: `depth` is ignored by the ogbench_mlp tower but must still be a legal value.
+STOCK_ARCH = ArchConfig(depth=4, width=512, repr_dim=512, tower="ogbench_mlp")
 
 #: Depths for the phase-1 depth sweep and the phase 3-4 grid. All divisible by 4.
 #: NOTE: the rebuttal's shallowest point was depth 2, which a 4-layer residual block
@@ -383,6 +394,35 @@ class AgentConfig:
             return {"repr_dim": 16, "init": "cold"}
         return {}
 
+
+#: Published OGBench command-line flags, per (dataset, agent).
+#: Source: `lib/ogbench/impls/hyperparameters.sh`. These OVERRIDE the agent defaults,
+#: because `crl.py`'s defaults are not what OGBench actually ran per environment.
+#:
+#:   L158  antmaze-medium-stitch-v0 (GCBC)  -- no flags, pure defaults
+#:   L166  antmaze-medium-stitch-v0 (CRL)   -- --agent.actor_p_randomgoal=0.5
+#:                                             --agent.actor_p_trajgoal=0.5
+#:                                             --agent.alpha=0.1
+#:
+#: The random-goal half matters especially on `stitch` datasets: stitching is the whole
+#: point of that dataset type, and trajectory-only actor goals never ask the policy to
+#: connect segments. Using crl.py's bare defaults (actor_p_trajgoal=1.0) would not have
+#: reproduced the published setup.
+#: Every published command also uses --eval_episodes=50; we evaluate with 15 during
+#: training (cheap curves) and re-evaluate the best checkpoint at 50 for the headline.
+PUBLISHED_FLAGS: dict[tuple[str, str], dict] = {
+    ("antmaze-medium-stitch-v0", "crl"): dict(
+        actor_p_trajgoal=0.5, actor_p_randomgoal=0.5, alpha=0.1,
+    ),
+    ("antmaze-medium-stitch-v0", "gcbc"): dict(),
+    ("antmaze-medium-navigate-v0", "crl"): dict(
+        actor_p_trajgoal=1.0, actor_p_randomgoal=0.0, alpha=0.1,
+    ),
+    ("antmaze-large-navigate-v0", "crl"): dict(
+        actor_p_trajgoal=1.0, actor_p_randomgoal=0.0, alpha=0.1,
+    ),
+}
+PUBLISHED_EVAL_EPISODES = 50
 
 #: Loss variants for the Q1 pilot: 2 losses x 2 depths, CRL only.
 Q1_PILOT_LOSSES = (
@@ -542,9 +582,16 @@ class TrainConfig:
     eval_temperature: float = 0.0
     #: 0 avoids MuJoCo rendering entirely (EGL on the GPU nodes is untested, Q5).
     video_episodes: int = 0
-    #: Early stop: no improvement in best success over this many evaluations.
+    #: Early stop. Evaluated on a moving average of the last `plateau_window`
+    #: evaluations rather than the raw point, since single-eval success over 75
+    #: episodes is noisy enough to trigger a false plateau.
     plateau_patience: int = 5
     plateau_min_delta: float = 0.01
+    plateau_window: int = 3
+    #: The plateau rule cannot fire before this many gradient steps. OGBench's own
+    #: published runs train for 1M steps, so stopping earlier than that would not be
+    #: comparable to their numbers no matter how flat the curve looks.
+    plateau_min_steps: int = 1_000_000
     seeds: tuple[int, ...] = (0, 1, 2)
 
     def step_cap(self, size: int) -> int:
@@ -621,6 +668,20 @@ GRIDS: dict[str, GridSpec] = {
         note="4 runs. binary_nce+dot (offline codebases) vs infonce+neg_l2+logsumexp "
              "(the recipe the 1000-layer depth result was actually obtained with).",
     ),
+    # --- Phase 1 anchor: reproduce OGBench's published numbers with OGBench's own
+    # architecture, before any of our changes are in the picture. If this misses, the
+    # depth sweep is uninterpretable regardless of what it shows.
+    "phase1_anchor": GridSpec(
+        name="phase1_anchor",
+        dataset="antmaze-medium-stitch-v0",
+        depths=(4,),                      # ignored by the ogbench_mlp tower
+        sizes=None,
+        agents=(_CRL, _GCBC),
+        arch=STOCK_ARCH,
+        note="Stock OGBench 3x512 GELU MLP, latent_dim 512, published flags, 1M steps. "
+             "TARGETS (OGBench paper, antmaze-medium-stitch): CRL 53+/-6, GCBC 45+/-11, "
+             "scored as the mean of the last 3 evaluations. 6 runs.",
+    ),
     # --- Phase 3 corner: run this before filling the grid.
     "phase3_corner": GridSpec(
         name="phase3_corner",
@@ -694,6 +755,10 @@ SLURM = SlurmConfig()
 # Run identity
 # ---------------------------------------------------------------------------
 
+#: Grids whose step budget is fixed rather than size-derived.
+FIXED_STEP_CAPS = {"phase1_anchor": 1_000_000}
+
+
 def run_config(
     grid: str, depth: int, size: int | None, agent: AgentConfig, seed: int,
     arch: ArchConfig | None = None,
@@ -701,6 +766,10 @@ def run_config(
     """Fully resolved config for one run. This dict IS the run's identity."""
     spec = GRIDS[grid]
     agent = agent.resolved()
+    # Published per-environment flags override the agent defaults.
+    pub = PUBLISHED_FLAGS.get((spec.dataset, agent.agent))
+    if pub:
+        agent = dataclasses.replace(agent, **pub)
     base = arch or spec.arch or ArchConfig(depth=depth)
     base = dataclasses.replace(base, depth=depth, **agent.arch_overrides())
     ds = DATASETS[spec.dataset]
@@ -716,7 +785,10 @@ def run_config(
         "train": {
             k: v for k, v in dataclasses.asdict(TRAIN).items() if k != "step_caps"
         },
-        "step_cap": TRAIN.step_cap(size if size is not None else ds.transitions_per_shard),
+        "step_cap": FIXED_STEP_CAPS.get(
+            grid, TRAIN.step_cap(size if size is not None else ds.transitions_per_shard)
+        ),
+        "published_flags": pub or {},
         "optim": dataclasses.asdict(OPTIM),
         "checkpoint": dataclasses.asdict(CHECKPOINT),
         "optim_deviations": OPTIM.deviates_from_baseline(),

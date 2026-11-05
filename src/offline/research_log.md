@@ -275,6 +275,94 @@ run done), `driver.log`, `checkpoints/`, `probes/`.
 | videos | 0 (EGL works, but state-based eval does not need rendering) |
 | episode length | antmaze-medium-stitch 1000 · cube-double-play 500 |
 
+
+### 1.9 Published OGBench flags (what the reference runs actually used)
+
+From `lib/ogbench/impls/hyperparameters.sh`, verbatim:
+
+```
+L158  antmaze-medium-stitch-v0 (GCBC)
+      main.py --env_name=antmaze-medium-stitch-v0 --eval_episodes=50 --agent=agents/gcbc.py
+L166  antmaze-medium-stitch-v0 (CRL)
+      main.py --env_name=antmaze-medium-stitch-v0 --eval_episodes=50 --agent=agents/crl.py \
+              --agent.actor_p_randomgoal=0.5 --agent.actor_p_trajgoal=0.5 --agent.alpha=0.1
+```
+
+**`crl.py`'s in-file defaults are NOT what OGBench ran.** The default is
+`actor_p_trajgoal=1.0, actor_p_randomgoal=0.0`; the published antmaze-medium-stitch
+command uses 0.5/0.5. That matters most on `stitch` datasets, where stitching together
+trajectory segments is the entire point and trajectory-only actor goals never pose the
+problem. GCBC genuinely uses bare defaults, so only CRL rows change.
+
+These live in `PUBLISHED_FLAGS` in `config.py`, keyed by `(dataset, agent)`, applied in
+`run_config()` on top of the agent defaults. Each run config records what was applied
+under `published_flags`, so a missing override is visible in the artifact itself.
+
+Other published settings: `train_steps` default 1,000,000; `eval_episodes` 50.
+
+### 1.10 Resolved network shapes, read from a real checkpoint
+
+Verifying that injecting the residual tower did not quietly repurpose OGBench's
+`hidden_dims`. From `params_best.pkl` of a CRL depth-4 run on antmaze-medium-stitch
+(ob 29, act 8; leading dim 2 is the critic ensemble):
+
+```
+modules_critic/phi/ResidualTower_0/Dense_0/kernel              (2, 37, 256)   stem: 29+8 -> width
+modules_critic/phi/ResidualTower_0/ResidualBlock_0/Dense_0..3  (2, 256, 256)  4 layers at width
+modules_critic/phi/ResidualTower_0/Dense_1/kernel              (2, 256,  64)  head -> repr_dim
+modules_actor/actor_net/ResidualTower_0/Dense_0/kernel         (58, 256)      stem: 29+29 -> width
+```
+
+So the φ/ψ **head width is 64** (`latent_dim` / `repr_dim`) and the **last hidden layer is
+still 256** (`arch.width`). Setting `value_hidden_dims=(256,)` did not change the hidden
+width — OGBench builds `MLP((*hidden_dims, latent_dim))` and the shim reads only
+`hidden_dims[-1]` as its output dim, so the tuple carries the head width and nothing else.
+The checkpoint also confirms the 2-critic ensemble and that Adam state (`mu`/`nu`) is
+stored, i.e. checkpoints are resumable.
+
+### 1.8 Goal-sampling distribution — 43.6% of CRL positives are the final state
+
+Measured on `antmaze-medium-stitch-v0` with the real `GCDataset`, 200,000 samples,
+`discount=0.99`, trajectory length 201 rows:
+
+| Goal stream | P(goal == trajectory final state) | mean distance | median |
+| --- | --- | --- | --- |
+| **value goals** (`value_geom_sample=True`) | **0.436** | 56.5 | 44 |
+| actor goals (`actor_geom_sample=False`) | 0.024 | 50.2 | 38 |
+
+Mechanism, in `utils/datasets.py` `sample_goals`:
+`traj_goal_idxs = np.minimum(idxs + offsets, final_state_idxs)`. Geometric offsets with
+p = 1 − 0.99 have mean 100, well past the ~100-step average remainder of a 201-step
+trajectory, and every overshoot is **clipped onto the final state** rather than resampled.
+So nearly half of the critic's positive pairs are the same handful of terminal states.
+
+Distance histogram for value goals: `[0,10)` 0.133 · `[10,25)` 0.181 · `[25,50)` 0.228 ·
+`[50,100)` 0.274 · `[100,200)` 0.183.
+
+**Consequences for the probes (phase 2):**
+- Every distance-binned probe must treat "goal == final state" as its **own bin**, not
+  fold it into `[100,200)`. Otherwise 43.6% of the mass — a degenerate, highly repeated
+  set of targets — silently dominates the far-distance bins, which are exactly the bins
+  H-horizon is about.
+- Probe 1 (critic ranking accuracy) will look artificially strong at long distances,
+  because the "far goal" it is scoring is often a state the critic has seen thousands of
+  times as a positive.
+- The effect is **specific to the critic**: actor goals use uniform sampling and pile up
+  only 2.4%. So any train/eval asymmetry between critic and actor partly traces to here.
+- The fraction is dataset-dependent — measured, not predicted:
+
+  | Dataset | traj len | value: P(final) | value mean dist | actor: P(final) |
+  | --- | --- | --- | --- | --- |
+  | `antmaze-medium-stitch-v0` | 201 | **0.436** | 56.5 | 0.025 |
+  | `cube-double-play-100m-v0` | 1001 | **0.101** | 89.6 | 0.005 |
+
+  So the grid task is 4× less affected than the phase-1 reproduction task. That is itself
+  a confound to keep in view: any horizon effect seen on antmaze-medium-stitch is partly
+  an artifact of its short trajectories, and will not transfer at the same strength to
+  cube-double. **Re-measure per dataset; never reuse 43.6%.**
+
+Reproduce with `src/scripts/goal_distribution.py`.
+
 ---
 
 ## 2. Decisions
@@ -547,8 +635,15 @@ Set memory explicitly in every script — Stellar's 7500 MB/core default breaks 
 
 Append one entry per run batch. Template:
 
+**Scoring convention — report all three, they answer different questions:**
+`reeval@50` (best checkpoint re-scored at 50 episodes/task — the number comparable to
+OGBench's published table), `last3_eval_mean` (mean of the final 3 training evaluations —
+the convention the paper scores with), and `best_success` (best single training eval —
+optimistic, since it is a max over ~20 noisy points).
+
 ```
 ### E<n> — <short name>  ·  <date>
+**Scores:** reeval@50 = · last3 = · train best =
 **Question:**
 **Config:** agent / depth / width / dataset + subset id / seeds / loss form / repr dim / batch / lr
 **Commit:**
@@ -565,6 +660,16 @@ Append one entry per run batch. Template:
 
 ## 6. Changelog
 
+- **2026-11-05 (later)** — Acted on review feedback, all six items. Found and fixed a
+  real configuration bug: CRL was using `crl.py`'s bare defaults
+  (`actor_p_trajgoal=1.0`) rather than OGBench's published antmaze-medium-stitch command
+  (`0.5/0.5`, `hyperparameters.sh` L166) — material on a `stitch` dataset, where
+  stitching is the point. Cancelled the 12 in-flight runs, added `PUBLISHED_FLAGS`,
+  regenerated all configs. Added the `phase1_anchor` grid (stock OGBench MLP, published
+  flags, 1M steps) as the reproduction gate. Plateau rule now needs 1M steps minimum and
+  tests a 3-eval moving average. Added `reeval.py` (50 eps/task post hoc) and
+  `goal_distribution.py`. Verified resolved network shapes from a real checkpoint (§1.10)
+  and measured the goal-sampling pile-up (§1.8).
 - **2026-11-05** — D5 settled as shard-aligned; D6 (OGBench impls + patches), D9 (plain
   Adam) and D10 (Slurm shape) settled. Q5 and Q6 resolved. Downloaded all planned data
   (4.36 GB). Built and GPU-verified the full training stack — residual tower with measured
