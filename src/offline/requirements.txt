@@ -1,0 +1,14 @@
+# Offline CRL stack (horizon-reduction / OGBench impls). Local Mac = CPU jax; on the GPU cluster swap jax -> jax[cuda12]==<same version>.
+jax==0.4.38
+flax==0.10.2
+optax==0.2.4
+distrax==0.1.5
+tensorflow-probability==0.25.0
+ogbench==1.1.5
+ml_collections
+absl-py
+numpy<2.3
+matplotlib
+moviepy<2
+wandb
+tqdm
