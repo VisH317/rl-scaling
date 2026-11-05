@@ -128,3 +128,24 @@ cannot resolve one, because OGBench's env id is not the dataset name
 fallback to 1000 halves every humanoid estimate.
 
 `run.py` prints the same model's headline, so there is only one cost number.
+
+## Watching things run
+
+```bash
+$V src/scripts/dashboard.py                 # everything you have, one snapshot
+$V src/scripts/dashboard.py --watch 30      # live, refreshing
+$V src/scripts/dashboard.py --tasks         # + per-task breakdown of the last eval
+$V src/scripts/dashboard.py --grid NAME     # just one experiment
+```
+
+`dashboard.py` answers "what do I have running right now" across every experiment;
+`monitor.py --grid NAME` answers "how is this one grid doing" in more detail. Both are
+read-only and safe to leave open in a second terminal.
+
+**On per-episode progress:** there isn't any to show. OGBench's `evaluate()` loops over
+episodes internally with tqdm disabled, so nothing is emitted until an evaluation
+finishes. The finest real granularity is one evaluation, which `eval.csv` records with
+its per-task breakdown — that is what `--tasks` prints. The dashboard does *infer* the
+evaluating phase and labels it as inferred: the heartbeat is only written on step
+boundaries and `eval_interval` is a multiple of `heartbeat_interval`, so a run parked
+exactly on an eval boundary with a heartbeat older than one normal gap is mid-eval.

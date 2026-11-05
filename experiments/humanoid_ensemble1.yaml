@@ -27,8 +27,8 @@ name: humanoid_ensemble1
 dataset: humanoidmaze-medium-navigate-v0
 seeds: [0, 1, 2]
 
-agent: [crl, gcbc]
-depth: [4, 8, 16]
+agent: [crl]
+depth: [4, 8, 16, 32]
 
 profile: ogbench               # binary_nce + dot + no logsumexp penalty
 critic_ensemble: 1             # <- the one deliberate change
@@ -40,3 +40,5 @@ block_size: 4
 
 step_cap: 2000000
 plateau_min_steps: 1000000
+eval_interval: 100000
+eval_episodes: 15

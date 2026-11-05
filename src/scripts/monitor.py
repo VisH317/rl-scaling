@@ -26,6 +26,8 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from offline import config as C  # noqa: E402
@@ -126,8 +128,18 @@ def main() -> int:
         jq = squeue_rows()
         live = {r["job"] for r in jq}
         recs = collect(args.grid)
-        spec = C.GRIDS[args.grid]
-        expected = spec.n_runs()
+        # Grids now come from experiments/*.yaml, so C.GRIDS may not know this one.
+        # Fall back to the manifest, then to what is on disk, rather than KeyError.
+        spec = C.GRIDS.get(args.grid)
+        if spec is not None:
+            expected = spec.n_runs()
+        else:
+            try:
+                import gen_runs
+                expected = sum(1 for r in gen_runs.load_manifest()
+                               if r.get("grid") == args.grid) or len(recs)
+            except Exception:  # noqa: BLE001
+                expected = len(recs)
 
         buckets: dict[str, list] = {}
         for r in recs:
