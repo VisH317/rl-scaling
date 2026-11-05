@@ -53,8 +53,14 @@ RAMP = {
     "gcbc": ["#f5a583", "#f08354", "#eb6834", "#c04f24", "#8f3a1a"],
 }
 
-#: Reference points from the 1000-layer paper's rebuttal (antmaze-medium-stitch, GCBC).
-#: Annotations, NOT a series -- they come from a paper, not from these runs.
+#: Reference points recorded as coming from the 1000-layer paper's rebuttal
+#: (antmaze-medium-stitch, GCBC). Annotations, NOT a series -- they are not runs of ours.
+#:
+#: UNVERIFIED (checked 2026-11-05): neither number appears in arXiv:2503.14858v5's text
+#: or on the project page, and the paper's main-text depths are 4/8/16/32/64 with no
+#: depth-2 run. If they are real they come from the OpenReview discussion, which nobody
+#: has opened. Treat the dashed line as unsourced until someone does. It enters no
+#: computation -- it is drawn and annotated only.
 REBUTTAL_GCBC = {2: 0.47, 32: 0.63}
 
 

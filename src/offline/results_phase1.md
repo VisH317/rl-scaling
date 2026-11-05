@@ -10,9 +10,13 @@ terminal output.
 
 > **Headline.** `phase1_repro`'s own grid spec in `config.py` says: *"Expect CRL flat
 > with depth, GCBC rising. If CRL scales here, stop and report — that alone changes the
-> project."* **CRL scaled: 34.1 → 49.3 → 74.2 across depths 4 → 8 → 16.** This is the
-> pre-registered stop-and-report condition, and §5 is the evidence that it is the critic
-> doing the scaling.
+> project."* **CRL scaled: 34.1 → 49.3 → 74.2 across depths 4 → 8 → 16.**
+>
+> The 1000-layer paper's own §4.6 reports the opposite for offline CRL on OGBench:
+> *"We found little evidence that increasing the network depth of CRL improves
+> performance in this offline setting."* **But we are not running their critic loss** —
+> ours is OGBench's binary-NCE with dot-product logits, theirs is InfoNCE with negative
+> L2 and a logsumexp penalty. Read §2 before §6.
 
 ---
 
@@ -118,7 +122,135 @@ and conveys very little.
 
 ---
 
-## 2. The two grids
+## 2. What the 1000-layer paper actually does — and where we differ
+
+Verified 2026-11-05 against arXiv:2503.14858v5 (Wang, Javali, Bortkiewicz, Trzciński,
+Eysenbach; NeurIPS 2025) and the project page. Quotes are verbatim from the HTML full
+text unless marked.
+
+### 2.1 Yes, there is policy extraction — in both their setup and ours
+
+Their §3: *"The policy πθ(a|s,g) is trained to maximize the critic"*, i.e. maximize
+`E[f_φ,ψ(s,a,g)]` where the critic is `f = −‖φ(s,a) − ψ(g)‖₂`. A separate actor network,
+trained against the contrastive critic.
+
+**Ours does the same thing.** Our CRL runs use OGBench's `actor_loss='ddpgbc'`:
+
+```python
+q_loss   = -q.mean() / stop_gradient(|q|.mean() + 1e-6)   # maximize the critic
+bc_loss  = -(alpha * log_prob).mean()                     # alpha = 0.1
+actor_loss = q_loss + bc_loss
+```
+
+and evaluation rolls out that extracted actor in the environment. **Every success number
+in this document is an extracted policy's**, not a critic-only metric. The difference
+from theirs is the `bc_loss` term — offline, OGBench regularizes the actor toward the
+data, which the online paper does not need.
+
+### 2.2 Their evaluation metric is not ours
+
+Their §4.1: *"For evaluation, we measure the number of time steps (out of 1000) that the
+agent is near the goal"*, reported as *"the average score over the last five epochs of
+training."* That is **dwell time**, not binary success.
+
+We report OGBench's **binary episode success**. So our numbers are not directly
+comparable to their headline figures — but they *are* comparable to OGBench's published
+table, which is the right comparator for an offline OGBench reproduction. Nothing here
+should be read as reproducing their online numbers.
+
+### 2.3 They scale actor and critic jointly — and so do we
+
+Their §4.1: *"the depth refers to the configuration of the actor network and both critic
+encoder networks, which are scaled jointly, except for the ablation experiment in
+Section 4.4."*
+
+Ours scales jointly too. Measured from our checkpoints:
+
+| depth | CRL critic params | CRL actor params | GCBC total params |
+|---|---|---|---|
+| 4 | 1,163,520 | 282,888 | 282,888 |
+| 16 | 4,346,112 | 1,078,536 | 1,078,536 |
+
+CRL's actor is **parameter-identical** to GCBC's at every depth. That is what licenses
+the contrast in §6.1 — but see §6.2, it is a contrast, not an isolation.
+
+Their §4.4 ("Scaling the Actor vs. Critic Networks", Figure 6) is the isolation, and the
+answer is environment-dependent: *"In Arm Push Easy, scaling the critic is more
+effective; in Ant Big Maze, the actor matters more. For Humanoid, scaling both is
+necessary."* **We have not run this.** It is our `actor_thread` preset, declared in
+`conf/experiment/` and not implemented — frozen-critic loading does not exist yet. It is
+now the highest-value missing experiment.
+
+### 2.4 Their setting is online; the offline result they report is NEGATIVE
+
+Their §3: *"Our focus is on online RL, where a replay buffer stores the most recent
+trajectories."* Main experiments run on JaxGCRL / Brax / MJX locomotion and manipulation,
+not OGBench.
+
+On offline, their §4.6, verbatim:
+
+> *"In preliminary experiments, we evaluated depth scaling in the offline
+> goal-conditioned setting using OGBench (Park et al., 2024). We found little evidence
+> that increasing the network depth of CRL improves performance in this offline
+> setting."*
+
+and
+
+> *"In all cases, baseline depth 4 networks often had the highest success. A key
+> direction for future work is to see if our method can be adapted to enable scaling in
+> the offline setting."*
+
+**We observe the opposite: CRL 34.1 → 49.3 → 74.2 across depths 4 → 8 → 16 (§6).** This
+is the project's pre-registered stop-and-report condition, and it contradicts the
+paper's own preliminary offline finding. That demands scepticism before it demands
+excitement.
+
+For offline **GCBC** they report a positive result on this exact dataset — Figure 14
+caption (available only as a summary, not verbatim): *"Our approach successfully scales
+depth in offline GCBC on antmaze-medium-stitch (OGBench)."* Our GCBC 53.5 → 65.2 then
+flat is broadly consistent with that.
+
+### 2.5 The most likely reason we disagree: we are not running their critic loss
+
+Confirmed from the run config of every CRL run in `phase1_repro`:
+
+| | 1000-layer paper | **what we ran** |
+|---|---|---|
+| critic loss | InfoNCE | **`binary_nce`** |
+| logits | `−‖φ−ψ‖₂` (negative L2) | **`dot`**, `φ·ψ/√d` |
+| logsumexp penalty | 0.1 | **0.0** |
+| actor | maximize critic | maximize critic **+ BC term**, `alpha=0.1` |
+| `repr_dim` | 64 | 64 (matches) |
+| setting | online | offline |
+
+Our depth result is for **OGBench's** contrastive loss, not the paper's. So the honest
+statement is not "we contradict the paper" but:
+
+> **Offline depth scaling works for CRL on antmaze-medium-stitch with the binary-NCE /
+> dot-product critic, which is not the critic the paper scaled.**
+
+That makes open question **Q1** — which critic loss the depth test should use — the
+single highest-priority experiment, and it reframes it. It is no longer "pick the right
+convention"; it is "is the loss form the reason offline depth scaling works here and not
+for them?" Either answer is a result. `q1_loss_pilot` is configured and unrun.
+
+Their offline ablations also included *"scaling critic depth while holding the actor at
+4 or 8 layers"* and *"applying cold initialization to the final layers of the critic
+encoders"* — the first is our `actor_thread`, the second our `arch=residual_cold`.
+Neither has been run.
+
+### 2.6 One reference line in our figures is unverified
+
+`fig1` draws a grey dashed reference at GCBC 0.47 (depth 2) → 0.63 (depth 32), labelled
+"1000-layer rebuttal (GCBC)". **Those two numbers do not appear anywhere in the paper
+text or project page.** They were recorded here as coming from a rebuttal, which would
+be the OpenReview discussion rather than the paper — not checked. The paper's main-text
+depths are 4/8/16/32/64 with no depth-2 run. Until someone opens the OpenReview thread,
+treat that line as unsourced. It is annotation only and enters no computation.
+
+---
+
+## 3. The two grids
 
 Both train on the same data. They differ in **what network** is underneath.
 
@@ -146,11 +278,11 @@ dataset (`actor_p_trajgoal=0.5`, `actor_p_randomgoal=0.5`, `alpha=0.1`), and eva
 every 100k steps at 15 episodes/task.
 
 **Because the anchor differs from `repro` depth 4 in three ways at once** — tower, width
-and `repr_dim` — the two are *not* a controlled comparison. See §4.
+and `repr_dim` — the two are *not* a controlled comparison. See §5.
 
 ---
 
-## 3. Status
+## 4. Status
 
 | grid | runs | finished | in flight |
 |---|---|---|---|
@@ -177,7 +309,7 @@ against, and the comparison itself as provisional.
 
 ---
 
-## 4. The anchor: did we reproduce OGBench?
+## 5. The anchor: did we reproduce OGBench?
 
 **Metric:** mean of the final 3 evaluations, the convention the OGBench paper reports.
 **Units:** percentage of episodes succeeded, 0–100. **Spread:** ±1 SD across 3 seeds.
@@ -207,7 +339,7 @@ Two mechanical caveats, both verified in the configs:
 
 ---
 
-## 5. The CRL critic is scaling — this is the result
+## 6. The CRL critic is scaling — this is the result
 
 **Metric:** last-3-evaluation mean, pinned to a fixed **1,000,000 gradient steps** for
 every run. The pin is necessary: the plateau rule stops runs anywhere between 0.9M and
@@ -230,16 +362,24 @@ rising at 16. At depth 16 CRL reaches 74%, against OGBench's published 53% for t
 agent on the same data.
 
 **GCBC saturates at depth 8**: 53.5 → 65.2 (real, SDs 6.8 and 1.6, non-overlapping),
-then flat at 62.5 and 61.2. Our depth-32 GCBC of 61.2 sits essentially on the 1000-layer
-rebuttal's own 63 at depth 32.
+then flat at 62.5 and 61.2. (A reference value of 0.63 at depth 32 is recorded in our
+figures as coming from the paper's rebuttal; it is **unverified** — see §2.6.)
 
-### 5.1 Why this is the critic and not just "bigger network"
+### 6.1 Is this the critic, or just a bigger network?
 
-GCBC and CRL share the same actor architecture and the same depth sweep. GCBC is **actor
-only** — no critic. It saturates. CRL adds the contrastive critic, and only CRL keeps
-scaling. The component that differs is the component that scales.
+Our depth axis moves the **actor and the critic together** (§2.3), so this grid cannot
+isolate the two. What it supports is a contrast, not an isolation:
 
-The critic's own diagnostics agree. All depths pinned to **1M gradient steps**; depth 32
+- CRL's actor is **parameter-identical** to GCBC's at every depth (282,888 at d4;
+  1,078,536 at d16 — exactly equal, measured from the checkpoints).
+- GCBC is that actor **alone**, with no critic. It saturates at depth 8.
+- CRL is that same actor **plus** a contrastive critic. It keeps scaling to 16.
+
+So the additional scaling arrives with the critic. That is an inference from the
+contrast; the experiment that would settle it is the paper's own §4.4 ablation — hold
+actor depth fixed and scale critic depth, and vice versa — which we have **not** run.
+
+The critic's own diagnostics are consistent with it. All depths pinned to **1M gradient steps**; depth 32
 excluded (not yet there):
 
 | depth | InfoNCE top-1 accuracy | train contrastive loss | **val** contrastive loss | task success |
@@ -268,19 +408,24 @@ obvious-looking metric.
 ~1/1024 positives, so predicting "negative" everywhere already scores 0.999. All depths
 sit between 0.9991 and 0.9993. `fig3` labels it as such.)
 
-### 5.2 Caveats on the scaling claim
+### 6.2 Caveats on the scaling claim
 
-1. **Depth and parameter count are confounded.** Width is fixed at 256, so deeper is
+1. **It contradicts the paper's own offline finding** (§2.4), which is reason to look
+   for our error before celebrating. Leading candidate is §2.5: we ran OGBench's
+   binary-NCE/dot critic, not the paper's InfoNCE/L2/logsumexp one.
+2. **Actor and critic depth are not separated** (§6.1). The paper's §4.4 ablation is the
+   missing experiment.
+3. **Depth and parameter count are confounded.** Width is fixed at 256, so deeper is
    also bigger: CRL d4 = 1.45M params, d8 = 2.77M. A width-matched control is **not** in
    the grid. The `plain_mlp` preset isolates residual-vs-plain but not depth-vs-size.
-2. **d16 and d32 are unfinished.** d16's 1M-step value is sound; its final value is not
+4. **d16 and d32 are unfinished.** d16's 1M-step value is sound; its final value is not
    in yet, and d32 has no 1M-step value at all.
-3. **15 episodes/task.** `2993575` pending.
-4. **One dataset, one environment.** Everything here is `antmaze-medium-stitch-v0`.
+5. **15 episodes/task.** `2993575` pending.
+6. **One dataset, one environment.** Everything here is `antmaze-medium-stitch-v0`.
 
 ---
 
-## 6. What the aggregate hides: depth unlocks one specific task
+## 7. What the aggregate hides: depth unlocks one specific task
 
 **Metric:** mean of last 3 evaluations, per task, averaged over 3 seeds. **Units:**
 fraction of episodes in `[0, 1]`.
@@ -311,7 +456,7 @@ fraction of episodes in `[0, 1]`.
 
 ---
 
-## 7. Cost
+## 8. Cost
 
 Finished runs only. **Units:** `params` = count of trainable parameters (critic +
 actor); `steps/s` = gradient steps per second on one GPU, mean over seeds; `wall-clock`
@@ -333,43 +478,48 @@ third the parameters and a quarter the wall clock.
 
 ---
 
-## 8. Figures
+## 9. Figures
 
 All in [`figures/<grid>/`](figures/), PNG + CSV.
 
 | file | what it answers |
 |---|---|
 | `fig1_success_vs_depth` | max-over-evaluations vs depth; in-flight depths hollow |
-| `fig1b_last3_vs_depth` | the published metric, pinned to a common step — §5's table |
+| `fig1b_last3_vs_depth` | the published metric, pinned to a common step — §6's table |
 | `fig2_learning_curves` | success vs gradient steps, by agent, depth as a colour ramp |
-| `fig3_critic_diagnostics` | §5.1 — the train/validation decoupling |
+| `fig3_critic_diagnostics` | §6.1 — the train/validation decoupling |
 | `fig4_cost` | params / throughput / wall clock, so depth is never read without its price |
-| `fig6_per_task` | §6 — the 5 tasks × 9 configs heatmap |
+| `fig6_per_task` | §7 — the 5 tasks × 9 configs heatmap |
 | `fig5_depth_data_heatmap` | not generated; needs >1 dataset size (phase 3) |
 
 ---
 
-## 9. What this changes
+## 10. What this changes
 
 - **The pre-registered stop condition fired.** `phase1_repro`'s spec said to stop and
-  report if CRL scales. It scaled.
-- **Q1 (critic loss form) is now urgent.** The depth effect is in the critic, which is
-  exactly what Q1 is about. `q1_loss_pilot` is configured and unrun.
-- **Q2 (`repr_dim`) now blocks interpretation**, per §6 point 2.
+  report if CRL scales. It scaled — and it scaled where the paper reports it does not.
+- **Q1 is no longer a convention question, it is the experiment.** We got offline depth
+  scaling with OGBench's binary-NCE/dot critic; the paper got none with
+  InfoNCE/L2/logsumexp. `q1_loss_pilot` tells us whether the loss form is the reason.
+  Either answer is a result.
+- **Implement `actor_thread`.** The paper's §4.4 separates actor depth from critic depth
+  and finds the answer environment-dependent. Our grid cannot separate them.
+- **Run `arch=residual_cold`.** The paper's other offline ablation, also unrun.
+- **Q2 (`repr_dim`) now blocks interpretation**, per §7 point 2.
 - **Extend the CRL sweep past 16.** It has not saturated; d32 is 14% through.
 - **Phase 2 probes should bin per task, not only per distance** — and should use the
   first-move angle from §1.4, which predicted GCBC's per-task results exactly.
 
 ---
 
-## 10. Defects found while compiling this
+## 11. Defects found while compiling this
 
 All four were found by checking output rather than trusting it; all four are fixed in
 `plot_results.py`.
 
 1. `fig3` looked for `train/categorical_accuracy`; the column is
    `train/critic/categorical_accuracy`. Every metric looked absent and the function
-   returned without drawing **or warning**. §5.1 did not exist until this was fixed. It
+   returned without drawing **or warning**. §6.1 did not exist until this was fixed. It
    now warns and names the columns it did find.
 2. `fig3` took each run's *last* logged value, comparing a depth-32 run at 280k steps
    against a depth-4 run at 1.9M and labelling both "final". Now pinned to a common step.

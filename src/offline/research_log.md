@@ -158,6 +158,55 @@ Consequences:
       Dense(repr_dim)                   # no norm, no activation
   ```
 
+### 1.12 What the 1000-layer paper's §4.6 says about **offline** depth scaling
+
+Verified 2026-11-05 against arXiv:2503.14858v5 full text. This is the single most
+important fact for the project and it was not in this log before.
+
+> §4.6, verbatim: *"In preliminary experiments, we evaluated depth scaling in the offline
+> goal-conditioned setting using OGBench (Park et al., 2024). We found little evidence
+> that increasing the network depth of CRL improves performance in this offline
+> setting."* ... *"In all cases, baseline depth 4 networks often had the highest success.
+> A key direction for future work is to see if our method can be adapted to enable
+> scaling in the offline setting."*
+
+**We observe the opposite** (`phase1_repro`, E2): CRL 34.1 → 49.3 → 74.2 across depths
+4 → 8 → 16 on antmaze-medium-stitch. The likely reason, confirmed from our run configs:
+**we are not running their critic loss.** Ours is `critic_loss=binary_nce`,
+`logits=dot`, `logsumexp_penalty=0.0`; theirs is InfoNCE on `−‖φ−ψ‖₂` with a 0.1
+logsumexp penalty. This turns **Q1** from a convention question into the experiment.
+
+Other verified facts from the paper:
+
+- **Policy extraction exists in both setups.** Their §3: *"The policy πθ(a|s,g) is
+  trained to maximize the critic."* Ours is OGBench `actor_loss='ddpgbc'` =
+  `q_loss + bc_loss` with `alpha=0.1`. Every success number we report is an extracted
+  policy's, evaluated by rollout.
+- **Their metric is not ours.** §4.1: *"we measure the number of time steps (out of
+  1000) that the agent is near the goal"*, averaged over the last five epochs — dwell
+  time, not binary success. Our numbers are comparable to OGBench's published table, not
+  to their headline figures.
+- **Depth scales actor and both critic encoders jointly** (§4.1), as ours does. Their
+  §4.4 ablates actor vs critic depth and finds it environment-dependent: *"In Arm Push
+  Easy, scaling the critic is more effective; in Ant Big Maze, the actor matters more."*
+  **That ablation is our unimplemented `actor_thread`**, and it is now the highest-value
+  missing experiment.
+- Their other offline ablations: *"scaling critic depth while holding the actor at 4 or
+  8 layers"* and *"applying cold initialization to the final layers of the critic
+  encoders"* (= our `arch=residual_cold`). Neither run.
+- Their main setting is **online** (JaxGCRL / Brax / MJX), not OGBench.
+- For offline **GCBC** they report a positive result on this exact dataset (Figure 14,
+  available to us only as a summary, not verbatim). Our GCBC 53.5 → 65.2 then flat is
+  broadly consistent.
+
+**Correction to this log:** `REBUTTAL_GCBC = {2: 0.47, 32: 0.63}` in `plot_results.py`
+is drawn as a reference line labelled "1000-layer rebuttal (GCBC)". Neither number
+appears in the paper text or on the project page, and the paper's main-text depths are
+4/8/16/32/64 with no depth-2 run. If real they are from the OpenReview thread, which
+nobody has opened. **Unsourced until someone does.** It is annotation only.
+
+---
+
 ### 1.6 No stable-CRL results exist on OGBench
 
 Checked and did not find any. Stable-CRL (arXiv 2306.03346, June 2023) **predates OGBench** (arXiv
