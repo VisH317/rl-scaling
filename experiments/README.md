@@ -95,5 +95,9 @@ about what ran. Audited 2026-11-05 by tracing each field to its consumer:
 | `actor_loss` | `ddpgbc` | `awr` needs a separate value network `build_config` does not create |
 
 So of the eight optimizer fields the config can express, exactly one — `lr` — reaches
-the optimizer. **Known deviation from the paper:** it uses a single critic encoder; we
-use OGBench's two. Recorded, not silently accepted.
+the optimizer.
+
+**Known deviation from the paper:** both use two critic *encoders*, `phi(s,a)` and
+`psi(g)` — that is the bilinear critic. OGBench additionally vmaps each into a 2-member
+*ensemble* (4 towers, giving `q1`/`q2` for the actor's `min`); the paper uses 1 member
+(2 towers). We keep OGBench's 2. Recorded, not silently accepted.

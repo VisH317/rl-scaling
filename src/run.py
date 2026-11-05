@@ -55,10 +55,13 @@ PROFILES: dict[str, dict] = {
         critic_loss="binary_nce", logits="dot", logsumexp_penalty=0.0,
         critic_ensemble=2, batch_size=1024,
     ),
-    # NOTE: the paper uses a SINGLE critic encoder; we keep OGBench's 2. Not an
-    # oversight -- `crl.py`'s ddpgbc actor does `q1, q2 = critic(...)`, so an
-    # ensemble of 1 would crash there. Changing it means patching the actor loss
-    # too. Recorded as a known deviation rather than silently accepted.
+    # NOTE on `critic_ensemble`: BOTH codebases have two critic ENCODERS, phi(s,a)
+    # and psi(g) -- that is the bilinear critic, not an ensemble. What differs is
+    # that OGBench vmaps each encoder into a 2-member ENSEMBLE (4 towers, giving
+    # q1/q2 for the actor's min), while scaling-crl uses 1 member (2 towers).
+    # We keep OGBench's 2: `crl.py`'s ddpgbc actor does `q1, q2 = critic(...)`, so
+    # an ensemble of 1 would crash. Recorded as a known deviation, not silently
+    # accepted.
     "scaling_crl": dict(
         critic_loss="infonce", logits="neg_l2", logsumexp_penalty=0.1,
         batch_size=256, repr_dim=64,

@@ -22,11 +22,21 @@ paired with a **value goal** `g_v` and an **actor goal** `g_a` drawn as in §4.
 
 Three towers, no target networks, no EMA.
 
-| tower | input | output | ensemble |
-|---|---|---|---|
-| `φ` | `[s, a]` (37-D) | `R^d` | 2 |
-| `ψ` | `g` (29-D) | `R^d` | 2 |
-| actor | `[s, g]` (58-D) | mean of a diagonal Gaussian over `a` | 1 |
+| tower | input | output | ensemble members | params each (d4) |
+|---|---|---|---|---|
+| `φ` | `[s, a]` (29 + 8 = 37-D) | `R^d` | 2 | 291,904 |
+| `ψ` | `g` (29-D) | `R^d` | 2 | 289,856 |
+| actor | `[s, g]` (58-D) | mean of a diagonal Gaussian over `a` | 1 | 282,888 |
+
+**Two encoders, two ensemble members, four towers.** `φ` and `ψ` are the *bilinear
+critic*: the only asymmetry is that `φ` sees the action and `ψ` does not. Separately,
+`GCBilinearValue` wraps each in `ensemblize(MLP, 2)`, so every parameter array carries a
+leading dim of 2 and the critic returns `q1, q2`, which the actor combines with `min`.
+Verified from a checkpoint: `phi/.../Dense_0/kernel` has shape `(2, 37, 256)`,
+`psi/.../Dense_0/kernel` is `(2, 29, 256)`, both heads `(2, 256, 64)`.
+
+`crl.py` also accepts optional *visual* encoders (`critic_state`, `critic_goal`) in
+front of `φ`/`ψ`. Unused here — everything is state-based, `encoder=None`.
 
 Critic (`GCBilinearValue`, `value_exp=False`):
 
