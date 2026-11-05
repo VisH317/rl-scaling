@@ -7,7 +7,7 @@
 #
 # Everything else is phase1_repro's: binary NCE on dot-product logits, no logsumexp
 # penalty ("BCE for now"), residual tower width 256, repr_dim 64, lr 3e-4 constant,
-# batch 1024, 3 seeds, published per-dataset flags.
+# batch 1024, 2 seeds (halved to save GPU hours), published per-dataset flags.
 #
 # Note the env, not just the body: humanoidmaze-medium is the SAME 8x8 maze with the
 # SAME five (start, goal) cell pairs as antmaze-medium, so the first-move-angle
@@ -25,7 +25,7 @@
 
 name: humanoid_ensemble1
 dataset: humanoidmaze-medium-navigate-v0
-seeds: [0, 1, 2]
+seeds: [0, 1]
 
 agent: [crl]
 depth: [4, 8, 16, 32]
