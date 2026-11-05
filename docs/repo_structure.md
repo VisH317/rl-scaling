@@ -93,6 +93,7 @@ experiment file. **No stage below may be merged with that check failing.**
 | D9 | **Hand-maintained schema docs drift, demonstrably.** `TEMPLATE.yaml:32` says `critic_ensemble: 2 # 2 only -- crl.py's actor unpacks q1, q2` and `experiments/README.md:94` says "1 would crash" — while `humanoid_ensemble1.yaml` with `critic_ensemble: 1` **is in the queue right now** | those two lines | docs that lie are worse than no docs |
 | D10 | **Dead scaffolding.** `src/rl_scaling/` contains only `print("Hello from rl-scaling!")`, is not installed, and `pyproject.toml` declares `requires-python = ">=3.13"` (venv is **3.11.15**), `dependencies = []` (real deps are in `src/offline/requirements.txt`), and an entry point `rl_scaling:main` nothing calls | `pyproject.toml`, `src/rl_scaling/__init__.py` | a newcomer's first `uv sync` fails or installs nothing |
 | D11 | **3,336 lines of markdown, a 2-line root README, no index** | `find . -name '*.md'` | the work is undiscoverable from the top |
+| D13 | **The vendored OGBench implementations are not versioned.** `.gitignore` line 1 is `lib/**`, so 54 MB of `impls/{agents,utils}` — which `patches.py` monkeypatches and the project cannot run without — is outside git. A fresh clone or a `git worktree` has no `lib/` at all | found by creating the worktree for this refactor | the repo is not reproducible from git alone, and checks pass *vacuously* where it is missing (see Stage 0's fix) |
 | D12 | **No CPU test entry point.** 6 modules have `_selftest`s; the only thing that runs them is `smoke.sbatch`, which **needs a GPU** | `grep -l _selftest src/**/*.py` | nothing catches drift on the login node in the 10 s it would take |
 
 ---
@@ -239,22 +240,50 @@ Ordered so that each is independently useful and independently revertible. Becau
 work is in a worktree (§0.1) none of them has to wait for the queue — the ordering is
 about dependency and proof, not about the scheduler. Sizes are rough.
 
-### Stage 0 — guardrails (do first, blocks everything) · ~80 ln · no risk
+### Stage 0 — guardrails · DONE (`6fce227`) · ~290 ln
 
-- Extend the `smoke.sbatch` run-id regression from 2 grids to **every** `experiments/*.yaml`, and snapshot the expected ids into a committed `tests/run_ids.json`.
-- Add `tests/check.py`: a **CPU-only, login-node-safe** entry point that runs every `_selftest`, resolves every experiment and suite, and diffs `TEMPLATE.yaml` against the generated schema. Target: **under 15 s, no GPU, no dataset**.
-- `make check` / `src/check.py` so it is one word to run.
+`src/check.py` — 9 checks, CPU-only, ~13 s. `tests/run_ids.json` pins the **54 run
+ids** the five committed experiments produce; `tests/plan_golden/` pins the plan text
+for each experiment and the eval suite, machine-specific lines normalised. A third
+check compares resolved ids against the run directories actually on scratch, because
+the golden alone cannot catch a rename where code and golden are regenerated together.
+`make check` / `make check-write`.
 
-*Verifies:* itself — it must pass before and after every later stage.
+**Verified the guards bite rather than merely pass.** Changing one default `run.py`
+inherits (`plateau_patience` 5→6) fails run-id stability on all five experiments, fails
+the plan goldens, and makes the orphan check name the humanoid run directories now
+training. Changing a default two experiments override (`repr_dim`) correctly fails only
+the three that rely on it.
 
-### Stage 1 — delete copy-paste with no design content · ~200 ln net **deletion** · low risk
+A precondition check was added after the worktree exposed D13: if `lib/ogbench/impls`
+is absent the harness **fails** instead of reporting a vacuous pass — `critic_losses`'
+self-test passes without it, because the maths runs while `install_critic_loss`, which
+monkeypatches `agents.crl`, is never reached.
+
+### Stage 1 — delete copy-paste with no design content · DONE · ~200 ln net **deletion**
 
 1. `rl_scaling/bootstrap.py` — the guard and path setup, once. The 5 copies become `import rl_scaling.bootstrap`. [D2, D3]
 2. `rl_scaling/paths.py` — move the path block out of `config.py`; `slurm/_prelude.sh` sourced by all four sbatch files, exporting `REPO`, `PY`, `EXP`, the GL and XLA vars and the log directory. **19 hardcoded paths → 2 env vars.** [D4]
 3. Fix `pyproject.toml` (`requires-python = ">=3.11"`, real dependencies from `requirements.txt`) and delete `src/rl_scaling/__init__.py`'s Hello World. [D10]
 4. **Submit-time code snapshot**: `--submit` copies `src/` to `<EXP>/code/<job_id>/` and the sbatch runs from there. Fixes §0 permanently and makes a finished run re-executable.
 
-*Verifies:* Stage 0 passes; `sbatch --test-only` on each script; one real 1-task eval job against the snapshot.
+**Done.** `rl_scaling/{bootstrap,paths,slurm}.py`; the 6 guard copies are 3 lines each
+(verified: every entry point still works under the system `python3` *and* the venv
+python). `slurm/_prelude.sh` `eval`s `paths.py`'s own output, so the shell and Python
+halves cannot drift; hardcoded paths in `src/slurm/` went **19 → 7**, and the 7 are the
+`#SBATCH --output` directives sbatch parses before any shell runs (the submitter now
+passes `--output`; the directives are hand-run fallbacks) plus one deliberate scratch
+fallback. `pyproject.toml` now declares the real dependencies and `>=3.9` instead of
+`>=3.13` against a 3.11 venv, and says in a comment that it does *not* cover `lib/`.
+
+The snapshot threw up a design point worth recording: `paths.REPO` (where the code
+runs) had to be split from `paths.OUTPUT_REPO` (where human-facing output lands).
+Without that, `eval.py --report` would have written `results_<suite>.md` into the
+snapshot on scratch, where nobody would ever see it.
+
+*Verified:* Stage 0 green throughout; the snapshot is self-sufficient
+(`<snap>/src/check.py` runs there and `_prelude.sh` resolves `REPO` to the snapshot);
+`sbatch --test-only` accepts the snapshot-based submission.
 
 ### Stage 2 — the schema as the single source · ~350 ln · low risk, high payoff
 

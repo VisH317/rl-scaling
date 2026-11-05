@@ -20,25 +20,14 @@ Designed to run on the login node in seconds. Anything needing a GPU belongs in
 `src/slurm/smoke.sbatch`.
 """
 
-# --- interpreter guard ------------------------------------------------------
-# Stellar's system python3 is 3.6.8; this project needs 3.9+. Must stay 3.6-parseable
-# and above every other import. See the same block in src/run.py.
+# Interpreter guard and import paths, in one line. MUST come first and stay
+# 3.6-parseable: Stellar's system python3 is 3.6.8 and importing this re-execs into
+# the project venv. See src/rl_scaling/bootstrap.py for why.
 import os
 import sys
 
-_PY = os.environ.get("RL_SCALING_PYTHON") or os.path.join(
-    os.environ.get("RL_SCALING_SCRATCH", "/scratch/gpfs/vt7993"),
-    "rl-scaling", "venv", "bin", "python")
-if sys.version_info < (3, 9):
-    if not os.path.exists(_PY):
-        sys.stderr.write(
-            "this needs Python 3.9+ (found %d.%d) and the project venv is not at\n"
-            "  %s\nSet RL_SCALING_PYTHON to your interpreter, or run it as\n"
-            "  <venv>/bin/python %s\n"
-            % (sys.version_info[0], sys.version_info[1], _PY, __file__))
-        raise SystemExit(1)
-    os.execv(_PY, [_PY, os.path.abspath(__file__)] + sys.argv[1:])
-# ----------------------------------------------------------------------------
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rl_scaling.bootstrap  # noqa: E402,F401
 
 import argparse
 import glob
@@ -80,6 +69,42 @@ def check(name, fn):
         for line in str(detail).rstrip().splitlines()[-25:]:
             print(f"        {line}")
     return ok
+
+
+# ---------------------------------------------------------------------------
+# Preconditions
+# ---------------------------------------------------------------------------
+
+def check_impls():
+    """The vendored OGBench implementations must be importable.
+
+    `lib/**` is gitignored, so a fresh clone or a `git worktree` has no `lib/` at all
+    -- and several checks below then pass only because the code path that needs it is
+    never reached. `offline/critic_losses.py`'s self-test is the example: its maths
+    runs fine, while `install_critic_loss`, which monkeypatches `agents.crl`, is
+    silently not exercised. A harness that reports PASS in an environment where half
+    the project cannot import is the exact failure class this repo refuses elsewhere,
+    so this is a hard FAIL with the fix in the message.
+    """
+    def fn():
+        import rl_scaling.bootstrap as b
+        if not os.path.isdir(b.IMPLS):
+            return False, (
+                f"no OGBench implementations at {b.IMPLS}\n"
+                f"`lib/**` is gitignored, so this tree has none. Either clone OGBench "
+                f"there, or symlink an existing checkout:\n"
+                f"  ln -s /home/vt7993/rl-scaling/lib {b.REPO}/lib")
+        missing = [m for m in ("agents", "utils") if not os.path.isdir(
+            os.path.join(b.IMPLS, m))]
+        if missing:
+            return False, f"{b.IMPLS} is missing {missing}"
+        rc, out = _run([sys.executable, "-c",
+                        "import sys; sys.path.insert(0, '.'); "
+                        "import rl_scaling.bootstrap; "
+                        "import agents, utils.networks, ogbench; print('ok')"],
+                       cwd=os.path.join(REPO, "src"))
+        return rc == 0, out
+    return fn
 
 
 # ---------------------------------------------------------------------------
@@ -267,6 +292,9 @@ def main() -> int:
     print(f"\ncheck  ({'WRITE goldens' if args.write else 'verify'})  "
           f"python {sys.version.split()[0]}  {REPO}\n")
     t0 = time.time()
+    if not check("OGBench implementations importable", check_impls()):
+        print("\nstopping: the checks below would pass vacuously without them")
+        return 1
     for name, cmd in SELFTESTS:
         check(name, _selftest(cmd))
     check("every experiment resolves + run ids stable", check_run_ids(args.write))

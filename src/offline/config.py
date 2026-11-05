@@ -39,29 +39,23 @@ from typing import Literal
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
+# Moved to `rl_scaling.paths`, which is now the only module in the repo holding an
+# absolute path. Re-exported here because every consumer says `C.RUNS_DIR`; the
+# aliases are the compatibility layer, not a second definition.
 
-#: Scratch root. Home quota on Stellar is 93 GB; never put datasets under ~.
-SCRATCH_ROOT = os.environ.get("RL_SCALING_SCRATCH", "/scratch/gpfs/vt7993")
+from rl_scaling.paths import (  # noqa: E402
+    ANALYSIS_DIR, CONFIGS_DIR, DATA_DIR, EXPERIMENTS_DIR, EXPERTS_DIR, MANIFEST_DIR,
+    RUNS_DIR, SCRATCH_ROOT, SUBSET_DIR,
+)
 
-DATA_DIR = os.path.join(SCRATCH_ROOT, "ogbench", "data")
-SUBSET_DIR = os.path.join(SCRATCH_ROOT, "ogbench", "subsets")
-EXPERIMENTS_DIR = os.path.join(SCRATCH_ROOT, "rl-scaling", "experiments")
+from rl_scaling.paths import DATASET_URL  # noqa: E402,F401
 
-RUNS_DIR = os.path.join(EXPERIMENTS_DIR, "runs")
-CONFIGS_DIR = os.path.join(EXPERIMENTS_DIR, "configs")
-ANALYSIS_DIR = os.path.join(EXPERIMENTS_DIR, "analysis")
-MANIFEST_DIR = os.path.join(EXPERIMENTS_DIR, "data")
-
-#: OGBench's pretrained locomotion experts -- the SAME direction-conditioned policies
-#: that GENERATED every action in the locomaze datasets (`data_gen_scripts/
-#: generate_locomaze.py`). Downloaded from DATASET_URL/experts.tar.gz (69 MB).
-#: Used by the evals to compute a genuine oracle action for a chosen direction.
-EXPERTS_DIR = os.path.join(SCRATCH_ROOT, "ogbench", "experts")
-
-#: Which expert drives which environment family.
+#: Which of OGBench's pretrained locomotion experts drives which environment family.
+#: These are the SAME direction-conditioned policies that generated every action in
+#: the locomaze datasets (`data_gen_scripts/generate_locomaze.py`), so feeding one a
+#: direction yields the action the data generator would have taken. The checkpoints
+#: live at `paths.EXPERTS_DIR`, from `DATASET_URL/experts.tar.gz` (69 MB).
 EXPERT_FOR = {"antmaze": "ant", "humanoidmaze": "humanoid", "antsoccer": "antball"}
-
-DATASET_URL = "https://rail.eecs.berkeley.edu/datasets/ogbench"
 
 
 # ---------------------------------------------------------------------------

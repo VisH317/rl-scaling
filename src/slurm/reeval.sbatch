@@ -24,22 +24,13 @@
 
 set -uo pipefail
 
-REPO=/home/vt7993/rl-scaling
-PY=/scratch/gpfs/vt7993/rl-scaling/venv/bin/python
-
-export MUJOCO_GL=egl
-export TQDM_DISABLE=1
-export XLA_PYTHON_CLIENT_PREALLOCATE=false
-export PYTHONUNBUFFERED=1
-
+source "$(dirname "${BASH_SOURCE[0]}")/_prelude.sh"
 cd "$REPO" || exit 1
-mkdir -p /scratch/gpfs/vt7993/rl-scaling/experiments/logs
 
 EPISODES=${EPISODES:-50}
 GRIDS=${GRIDS:-"phase1_anchor phase1_repro"}
 
-echo "node: $(hostname)"
-nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+rl_banner
 echo "episodes/task: $EPISODES    grids: $GRIDS"
 
 rc=0

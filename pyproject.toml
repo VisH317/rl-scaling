@@ -1,16 +1,31 @@
 [project]
 name = "rl-scaling"
 version = "0.1.0"
-description = "Add your description here"
+description = "Offline contrastive-RL depth scaling on OGBench"
 readme = "README.md"
-authors = [
-    { name = "VisH317", email = "vt201916384@gmail.com" }
+requires-python = ">=3.9"
+# The cluster venv is Python 3.11.15. `src/rl_scaling/bootstrap.py` re-execs into it
+# when a 3.6 shebang picks up the system interpreter, and 3.9 is the floor the source
+# actually needs (PEP 585 generics in annotations).
+dependencies = [
+    "jax==0.4.38",
+    "flax==0.10.2",
+    "optax==0.2.4",
+    "distrax==0.1.5",
+    "tensorflow-probability==0.25.0",
+    "ogbench==1.1.5",
+    "ml_collections",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pyyaml",
 ]
-requires-python = ">=3.13"
-dependencies = []
 
-[project.scripts]
-rl-scaling = "rl_scaling:main"
+# NOTE: this does NOT cover `lib/ogbench` -- the vendored OGBench *implementations*
+# (`impls/agents`, `impls/utils`), which the project monkeypatches and cannot run
+# without. `.gitignore` line 1 is `lib/**`, so they are not versioned here; a fresh
+# clone or a `git worktree` has no `lib/` and `src/check.py` fails on purpose with
+# the fix in its message. See docs/repo_structure.md D13.
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]
