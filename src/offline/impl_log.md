@@ -312,3 +312,61 @@ All 8 presets compose: anchor 6 runs, repro 24, q1 pilot 2, corner 54, full 150,
 smoke 2, adhoc 1, actor_thread 30 (declared but not yet runnable — frozen-critic
 loading is unimplemented).
 
+
+---
+
+## I16 — Compiling the first results report  ·  2026-11-05
+
+Anchor grid complete (6/6). Repro grid 16/24, with CRL d16/d32 and GCBC d32 still
+training. Wrote `src/offline/results_phase1.md` from the figure CSVs rather than from
+terminal output, so every table in it is regenerable.
+
+Submitted job `2993575` (`src/slurm/reeval.sbatch`, new) to re-score `params_best.pkl`
+at the published 50 episodes/task for both grids. It is queued behind the 2-job GPU QOS
+limit and will start when a training pack finishes. This is review item 4, still the
+only unmeasured piece of the headline.
+
+**Four defects found in the reporting path, all by looking at output instead of trusting
+it. All fixed.**
+
+1. `fig3_critic_diagnostics` looked up `train/categorical_accuracy`; the real column is
+   `train/critic/categorical_accuracy`. Every metric looked absent, and the guard
+   `if not present: return` made the function exit **silently**. The critic diagnostics
+   — which turned out to carry the most interesting finding in the report — simply did
+   not exist until this was fixed. It now warns and names the columns it did find. A
+   figure that silently produces nothing is worse than one that crashes: the absence
+   reads as a decision.
+2. The same figure took each run's *last* logged value, comparing a depth-32 run at 280k
+   steps with a depth-4 run at 1.9M and labelling both "final". Now pinned to a common
+   step, with under-trained depths excluded and named in the caption. The first fix of
+   this was itself wrong — I gated the x-axis ticks but not the data loop, so depth 32
+   was still plotted, now mislabelled "at 1M". Caught by reading the CSV.
+3. `fig1` drew in-flight runs with the same markers as finished ones, so a depth-32
+   point at 14% progress read as a result. In-flight depths are now hollow markers on a
+   dotted connector, excluded from the solid series and from its mean.
+4. `fig4` took ticks from the full `GRID_DEPTHS` constant (empty slot at 64) and
+   repeated one legend in three panels.
+
+**Two new figures**, both because an existing one was answering the wrong question:
+
+- `fig1b_last3_vs_depth` — `fig1` plots the max over evaluations, which is a max over
+  ~20 noisy 75-episode estimates and sits well above where a policy settles. Comparing
+  that against a published last-3 mean is apples-to-oranges. `fig1b` uses the last-3
+  mean **pinned to a common 1M steps**, which also fixes a subtler problem: the plateau
+  rule stops runs between 0.9M and 1.9M, so an unpinned last-3 measures every run at a
+  different point.
+- `fig6_per_task` — the aggregate success rate averages 5 tasks of very different
+  difficulty and concealed the actual result. Task 4 is 0.00 for GCBC at every depth and
+  seed and ~0.00 for both agents under the stock architecture, while deep CRL reaches
+  0.80. Depth causes a phase transition on one task rather than a uniform lift.
+
+**Two mechanical defects in the runs themselves, logged but not yet fixed:**
+
+- `code_commit` is read from `git rev-parse` at process start and does not record
+  whether the tree was dirty. The anchor runs report `0009db4` while carrying config
+  values added in `6e01598`. Both statements are true and together they are useless for
+  identifying the code that ran.
+- `stop_reason` reads `"plateau"` for 4 of 6 anchor runs even though
+  `plateau_min_steps == step_cap == 1M` made early stopping impossible. The step counts
+  are right; only the label is wrong. Cosmetic, but it misleads in exactly the place
+  someone would look to check whether a run was cut short.

@@ -654,7 +654,29 @@ optimistic, since it is a max over ~20 noisy points).
 **Next:**
 ```
 
-*(No experiments run yet. Phase 0 in progress.)*
+### E1 — phase1_anchor: reproduce OGBench's published numbers  ·  2026-11-05
+**Scores:** reeval@50 = PENDING (job 2993575, queued) · last3 = CRL 45.5 ± 8.1, GCBC 37.2 ± 11.4 · train best = CRL 52.9, GCBC 54.2
+**Question:** does our harness reproduce OGBench's antmaze-medium-stitch table (CRL 53 ± 6, GCBC 45 ± 11)?
+**Config:** crl / gcbc · stock OGBench MLP 3×512 GELU · `repr_dim`/`latent_dim` 512 · antmaze-medium-stitch-v0 native 1M · seeds 0,1,2 · published flags (`actor_p_trajgoal=0.5`, `actor_p_randomgoal=0.5`, `alpha=0.1`) · batch 1024 · Adam constant lr 3e-4
+**Commit:** configs generated at `6e01598`'s tree, `code_commit` recorded as `0009db4` (tree was dirty; we do not record a dirty flag — see defect below)
+**Compute:** 1 GPU/run, 2.00 h (CRL) / 0.59 h (GCBC), 1M gradient steps, 1.024e9 samples, 3,793,416 (CRL) / 559,624 (GCBC) params, peak RSS 1.7 GB
+**Result:** both ~8 points below published, intervals overlapping. With 3 seeds and SD ≈ 10 pts (SE ≈ 5–6) this cannot resolve an 8-point gap. Per-task: **task 4 is 0.00–0.01 for both agents at every seed**, capping the aggregate at 0.80.
+**Probes:** none yet.
+**Read:** the published ~0.53 for CRL is *consistent with task 4 being unsolved in the original runs too*. Neither confirms nor refutes the reproduction; the 50-episode re-eval is the deciding measurement.
+**Next:** run 2993575. Add a dirty-tree flag to `code_commit`. Fix the `stop_reason: "plateau"` mislabel when `plateau_min_steps == step_cap`.
+
+### E2 — phase1_repro: depth sweep with the residual tower  ·  2026-11-05 (partial)
+**Scores:** reeval@50 = PENDING · last3 @ 1M = CRL 34.1 / 49.3 / **74.2** (d4/8/16), GCBC 53.5 / 65.2 / 62.5 / 61.2 (d4/8/16/32) · train best = see `fig1_success_vs_depth.csv`
+**Question:** does depth help offline GCRL on a stitching dataset, and does it help CRL and GCBC alike?
+**Config:** residual tower, `block_size` 4, width 256, `repr_dim` 64, LayerNorm + Swish, `lecun_uniform` (`variance_scaling(1/3,'fan_in','uniform')`) · depths 4/8/16/32 · seeds 0,1,2 · published flags · batch 1024 · Adam constant lr 3e-4 · cap 2M, plateau min 1M
+**Commit:** `0009db4` (d4) / `53177a7` (d8+) — same caveat on dirty trees
+**Compute:** 16 of 24 runs finished, 41.2 GPU-h total incl. the anchor. Throughput 151 (CRL d4) → 86 (CRL d8) → 98 (GCBC d32) steps/s.
+**Result:** **CRL scales and does not saturate by depth 16** (34 → 49 → 74, a 40-pt swing). **GCBC saturates at depth 8** (53.5 → 65.2, then flat). Per-task: depth unlocks **task 4 for CRL only** (0.13 → 0.49 → 0.80); GCBC is 0.00 on task 4 at every depth and seed. CRL and GCBC solve complementary task subsets — GCBC owns task 1 (0.90–0.95), CRL owns tasks 3 and 4.
+**Probes:** critic diagnostics at a common 1M steps — InfoNCE top-1 acc 0.369 → 0.467 → 0.583; train contrastive loss falls 0.00387 → 0.00269; **validation contrastive loss rises 0.00530 → 0.00632**.
+**Read:** the depth benefit is specific to the contrastive critic, not to "deeper nets on this data" — a deeper BC policy plateaus, a deeper value function does not. Held-out contrastive loss is **anti-correlated** with success here, so it must not be used for model selection or early stopping. Supports H-horizon: the task depth unlocks is the one requiring stitching.
+**Next:** CRL d16/d32 and GCBC d32 still training. Extend the CRL sweep past 16. Depth and parameter count are confounded (width fixed) — a width-matched control is not in the grid. Q2 (`repr_dim`) now blocks interpretation of §3's architecture inversion, not just configuration.
+
+**Full write-up with figures and tables: [`results_phase1.md`](results_phase1.md).**
 
 ---
 
