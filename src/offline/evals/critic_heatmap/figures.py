@@ -72,7 +72,7 @@ def load(suite_dir: str, eval_name: str = "critic_heatmap") -> list:
 
 
 def _panel(ax, field, geodesic, count, meta, task, *, cmap, vmin, vmax,
-           interpolate=False, show_path=True, render=None):
+           interpolate=False, show_path=True, render=None, extra_mask=None):
     """One maze panel.
 
     Two backgrounds are possible and the geometry is identical in both, because every
@@ -109,7 +109,8 @@ def _panel(ax, field, geodesic, count, meta, task, *, cmap, vmin, vmax,
         tr = ax.transData
 
     free = np.isfinite(geodesic)
-    usable = free & (count >= meta["min_states_per_bin"]) & np.isfinite(field)
+    has_data = free & (count >= meta["min_states_per_bin"]) & np.isfinite(field)
+    usable = has_data if extra_mask is None else (has_data & extra_mask)
     shown = np.where(usable, field, np.nan)
     if interpolate:
         shown = _fill_nearest(shown, free)
@@ -117,11 +118,16 @@ def _panel(ax, field, geodesic, count, meta, task, *, cmap, vmin, vmax,
     # Masked bins: flat neutral plus hatching, so "no data" is distinguishable from
     # "low value" without relying on color alone (CVD, print, forced-colors).
     bs = unit / sub
-    masked = np.argwhere(free & ~usable)
-    for bi, bj in masked[:600]:
+    for bi, bj in np.argwhere(free & ~has_data)[:600]:
         ax.add_patch(Rectangle((bj * bs - ox - unit / 2, bi * bs - oy - unit / 2),
                                bs, bs, facecolor=NODATA, edgecolor=P.MUTED, lw=0.0,
                                hatch="///", zorder=1, alpha=0.9, transform=tr))
+    # Bins dropped by the FIGURE's own criterion (not by missing data) are flat and
+    # pale: the question does not apply there, which is different from not knowing.
+    for bi, bj in np.argwhere(free & has_data & ~usable)[:600]:
+        ax.add_patch(Rectangle((bj * bs - ox - unit / 2, bi * bs - oy - unit / 2),
+                               bs, bs, facecolor=NODATA, edgecolor="none",
+                               zorder=1, alpha=0.55, transform=tr))
     im = ax.imshow(shown, origin="lower", extent=ext, cmap=cmap, vmin=vmin, vmax=vmax,
                    interpolation="bilinear" if interpolate else "nearest", zorder=2,
                    alpha=0.88 if render is not None else 1.0, transform=tr)
@@ -217,7 +223,7 @@ def _attach_geometry(rec):
 # ---------------------------------------------------------------------------
 
 def _field_figure(recs, out_dir, *, key, name, cmap, diverging, title, sublabel,
-                  interpolate=False):
+                  interpolate=False, mask_fn=None):
     if not recs:
         return None
     n_task = len(recs[0]["meta"]["tasks"])
@@ -232,8 +238,11 @@ def _field_figure(recs, out_dir, *, key, name, cmap, diverging, title, sublabel,
         for ti, task in enumerate(m["tasks"]):
             ax = axes[ri][ti]
             fld, geod, cnt = z[key][ti], z["geodesic"][ti], z["count"]
+            extra = mask_fn(rec, ti) if mask_fn else None
             usable = (np.isfinite(geod) & (cnt >= m["min_states_per_bin"])
                       & np.isfinite(fld))
+            if extra is not None:
+                usable = usable & extra
             vals = fld[usable]
             if vals.size < 8:
                 ax.set_facecolor(P.SURFACE)
@@ -248,11 +257,13 @@ def _field_figure(recs, out_dir, *, key, name, cmap, diverging, title, sublabel,
                 vmin = float(np.percentile(vals, 2))
                 vmax = float(np.percentile(vals, 98))
             _panel(ax, fld, geod, cnt, m, task, cmap=cmap, vmin=vmin, vmax=vmax,
-                   interpolate=interpolate, render=rec.get("render"))
+                   interpolate=interpolate, render=rec.get("render"),
+                   extra_mask=extra)
             met = rec["metrics"][key]["per_task"][ti]
             ax.set_title(f"[{vmin:+.2f}, {vmax:+.2f}]", color=P.MUTED, fontsize=7.5,
                          loc="right", pad=3)
-            ax.text(0.03, 0.03, sublabel(met), transform=ax.transAxes, fontsize=7.5,
+            ax.text(0.03, 0.03, sublabel(met, rec, ti), transform=ax.transAxes,
+                    fontsize=7.5,
                     color=P.INK_2, va="bottom", ha="left",
                     bbox=dict(facecolor=P.SURFACE, edgecolor="none", alpha=0.82,
                               pad=1.6))
@@ -270,7 +281,9 @@ def _field_figure(recs, out_dir, *, key, name, cmap, diverging, title, sublabel,
 
     fig.suptitle(title, color=P.INK, fontsize=13, x=0.012, ha="left", y=1.005)
     on_render = any(r.get("render") for r in recs)
-    note = (("field drawn on the environment's own top-down render, placed by a "
+    note = ((("pale bins: the question does not apply there (the two directions "
+              "agree). " ) if mask_fn else "")
+            + ("field drawn on the environment's own top-down render, placed by a "
              "measured world->pixel affine (fit RMS < 1 px); wall TOPS overhang the "
              "floor slightly under the perspective camera. "
              if on_render else "walls grey; ")
@@ -357,6 +370,48 @@ def _metric_lines(recs, out_dir, name, title, panels, key="q_policy"):
     return os.path.join(out_dir, f"{name}.png")
 
 
+def _cross_lines(recs, out_dir, name, title, keys):
+    """Metrics that compare two action sources; they live in metrics['_cross']."""
+    recs = [r for r in recs if any(k in r["metrics"].get("_cross", {}) for k in keys)]
+    if not recs:
+        return None
+    depths = [r["meta"]["depth"] for r in recs]
+    fig, axes = plt.subplots(1, len(keys), figsize=(3.7 * len(keys), 3.6),
+                             facecolor=P.SURFACE, squeeze=False)
+    rows = []
+    for pi, (key, label) in enumerate(keys.items()):
+        ax = axes[0][pi]
+        ys = [r["metrics"]["_cross"].get(key, {}).get("mean") for r in recs]
+        ax.plot(depths, ys, marker="o", ms=8, lw=2.0, color=P.SERIES["crl"],
+                clip_on=False, zorder=3)
+        if ys and ys[-1] is not None:
+            ax.annotate(f"{ys[-1]:+.3f}", (depths[-1], ys[-1]),
+                        textcoords="offset points", xytext=(8, 0), fontsize=8.5,
+                        color=P.INK_2, va="center", annotation_clip=False)
+        ax.axhline(0.0, color=P.AXIS, lw=1.0, ls=(0, (4, 3)), zorder=1)
+        P.style_axes(ax, xlabel="depth (residual blocks)", title=label)
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(depths)
+        ax.set_xticklabels([str(d) for d in depths])
+        ax.margins(x=0.18)
+    for r in recs:
+        c = r["metrics"]["_cross"]
+        rows.append([r["meta"]["depth"], r["meta"]["seed"], r["meta"]["run_id"]]
+                    + [c.get(k, {}).get("mean") for k in keys]
+                    + [c.get("split_bin_fraction"), c.get("direction_split_deg")])
+    fig.suptitle(title, color=P.INK, fontsize=13, x=0.012, ha="left")
+    fig.text(0.012, -0.04, "action_topology_gain is measured only on bins where the "
+             "geodesic and straight-line directions disagree by at least "
+             "direction_split_deg; split_bin_fraction says how many bins that is.",
+             color=P.MUTED, fontsize=8, ha="left", va="top")
+    fig.tight_layout()
+    P.save(fig, out_dir, name,
+           table_rows=rows,
+           table_header=["depth", "seed", "run_id"] + list(keys)
+           + ["split_bin_fraction", "direction_split_deg"])
+    return os.path.join(out_dir, f"{name}.png")
+
+
 def make_figures(suite_dir: str, out_dir: str = None, interpolate: bool = False) -> list:
     out_dir = out_dir or os.path.join(suite_dir, "figures")
     recs = [_attach_geometry(r) for r in load(suite_dir)]
@@ -368,7 +423,8 @@ def make_figures(suite_dir: str, out_dir: str = None, interpolate: bool = False)
         recs, out_dir, key="q_policy", name="fig1_critic_field", cmap=CMAP_Q,
         diverging=False, interpolate=interpolate,
         title="Critic value field under the policy's own action, by depth and task",
-        sublabel=lambda m: f"rho {m['rho_geodesic']:+.2f}  gain {m['topology_gain']:+.2f}"))
+        sublabel=lambda m, r, i: (f"rho {m['rho_geodesic']:+.2f}  "
+                                  f"gain {m['topology_gain']:+.2f}")))
     made.append(_metric_lines(
         recs, out_dir, "fig2_topology", "Does the value field follow the maze?",
         panels=[(["rho_geodesic", "rho_euclid"], "Spearman rho vs -distance", (-1, 1)),
@@ -378,7 +434,29 @@ def make_figures(suite_dir: str, out_dir: str = None, interpolate: bool = False)
             recs, out_dir, key="advantage", name="fig3_advantage_field", cmap=CMAP_ADV,
             diverging=True, interpolate=interpolate,
             title="Q(policy action) - Q(dataset action), by depth and task",
-            sublabel=lambda m: f"mean {m['q_mean']:+.3f}"))
+            sublabel=lambda m, r, i: f"mean {m['q_mean']:+.3f}"))
+    if any("oracle_geo_minus_euclid" in r["z"] for r in recs):
+        split = recs[0]["meta"].get("direction_split_deg", 45.0)
+
+        def _disagree(rec, ti):
+            ang = rec["z"].get("dir_angle_deg")
+            return None if ang is None else (np.isfinite(ang[ti]) & (ang[ti] >= split))
+
+        made.append(_field_figure(
+            recs, out_dir, key="oracle_geo_minus_euclid",
+            name="fig5_action_preference", cmap=CMAP_ADV, diverging=True,
+            interpolate=interpolate, mask_fn=_disagree,
+            title=f"Q(maze-correct action) - Q(straight-at-goal action), on the bins "
+                  f"where those differ by >= {split:.0f} deg",
+            sublabel=lambda m, r, i: "mean %+.3f  (%d bins)" % (
+                r["metrics"]["_cross"]["action_topology_gain"]["per_task"][i],
+                r["metrics"]["_cross"]["action_topology_gain"]["n_bins"][i])))
+        made.append(_cross_lines(
+            recs, out_dir, "fig6_action_tests",
+            "Does the critic prefer the maze-correct action?",
+            {"action_topology_gain":
+                 "Q(geodesic act) - Q(straight act), split bins",
+             "oracle_gap": "Q(policy act) - Q(geodesic act)"}))
     made.append(_metric_lines(
         recs, out_dir, "fig4_metrics", "Where the field peaks, and whether it climbs",
         panels=[(["peak_geodesic"], "distance of the peak bin to goal (units)", None),

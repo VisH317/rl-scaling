@@ -238,7 +238,7 @@ def load_run_config(run_dir: str) -> dict:
     return json.load(open(p))
 
 
-def load_agent(run_dir: str, checkpoint: str = "best"):
+def load_agent(run_dir: str, checkpoint: str = "best", env=None):
     """Rebuild the agent this run trained and restore `params_<checkpoint>.pkl`.
 
     Returns (agent, env, og_cfg, run_cfg). The architecture patches are
@@ -258,8 +258,9 @@ def load_agent(run_dir: str, checkpoint: str = "best"):
     if not os.path.exists(ckpt):
         raise FileNotFoundError(f"no checkpoint at {ckpt}")
 
-    import ogbench
-    env = ogbench.make_env_and_datasets(run_cfg["env_name"], env_only=True)
+    if env is None:
+        import ogbench
+        env = ogbench.make_env_and_datasets(run_cfg["env_name"], env_only=True)
 
     agent_name = run_cfg["agent"]["agent"]
     agent_module = importlib.import_module(f"agents.{agent_name}")
@@ -397,6 +398,71 @@ class MazeGeometry:
     def euclid(self, xy) -> np.ndarray:
         c = self.bin_centre_xy()
         return np.linalg.norm(c - np.asarray(xy, dtype=np.float64), axis=-1)
+
+    def cell_bfs(self, goal_ij) -> np.ndarray:
+        """Cell-resolution BFS distance to `goal_ij`; walls and unreachable are inf."""
+        d = np.full(self.maze.shape, np.inf)
+        d[goal_ij[0], goal_ij[1]] = 0.0
+        q, head = [tuple(int(v) for v in goal_ij)], 0
+        while head < len(q):
+            i, j = q[head]
+            head += 1
+            for n in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                if (0 <= n[0] < self.H and 0 <= n[1] < self.W and not self.maze[n]
+                        and not np.isfinite(d[n])):
+                    d[n] = d[i, j] + 1
+                    q.append(n)
+        return d
+
+    def next_cell_map(self, goal_ij) -> np.ndarray:
+        """(H, W, 2) the next cell on a shortest path to `goal_ij`, per cell.
+
+        Reproduces `locomaze/maze.py: get_oracle_subgoal` exactly: BFS from the goal,
+        then from each cell take the 4-neighbour with a strictly smaller distance,
+        staying put if none has one (which is only true at the goal itself). This is
+        the rule the DATA GENERATOR used, so an expert action computed from it is the
+        action the generator would have taken.
+        """
+        d = self.cell_bfs(goal_ij)
+        nxt = np.stack(np.meshgrid(np.arange(self.H), np.arange(self.W),
+                                   indexing="ij"), -1)
+        for i in range(self.H):
+            for j in range(self.W):
+                if self.maze[i, j] or not np.isfinite(d[i, j]):
+                    continue
+                best = d[i, j]
+                for n in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                    if (0 <= n[0] < self.H and 0 <= n[1] < self.W
+                            and d[n] < best):
+                        best = d[n]
+                        nxt[i, j] = n
+        return nxt
+
+    def oracle_direction(self, xy, goal_ij, goal_xy=None) -> np.ndarray:
+        """(N, 2) unit direction toward the next shortest-path cell, per state.
+
+        `+ 1e-6` in the normaliser, matching the data generator's own guard.
+        """
+        xy = np.asarray(xy, dtype=np.float64).reshape(-1, 2)
+        nxt = self.next_cell_map(goal_ij)
+        b = self.xy_to_bin(xy)
+        ci, cj = self.cell_of_bin(b[:, 0], b[:, 1])
+        tgt_ij = nxt[ci, cj]
+        tgt = np.stack([tgt_ij[:, 1] * self.unit - self.offset_x,
+                        tgt_ij[:, 0] * self.unit - self.offset_y], 1)
+        at_goal = (tgt_ij[:, 0] == np.asarray(goal_ij)[0]) & \
+                  (tgt_ij[:, 1] == np.asarray(goal_ij)[1])
+        if goal_xy is not None:
+            # In the goal cell the subgoal is the cell itself; aim at the actual goal.
+            tgt = np.where(at_goal[:, None], np.asarray(goal_xy, dtype=np.float64), tgt)
+        v = tgt - xy
+        return v / (np.linalg.norm(v, axis=1, keepdims=True) + 1e-6)
+
+    def straight_direction(self, xy, goal_xy) -> np.ndarray:
+        """(N, 2) unit direction straight at the goal, through any walls in the way."""
+        xy = np.asarray(xy, dtype=np.float64).reshape(-1, 2)
+        v = np.asarray(goal_xy, dtype=np.float64) - xy
+        return v / (np.linalg.norm(v, axis=1, keepdims=True) + 1e-6)
 
     def optimal_path(self, start_xy, goal_xy) -> np.ndarray:
         """Bin indices along one shortest path start -> goal, descending the geodesic."""
@@ -545,3 +611,85 @@ def render_top_down(env, geo: "MazeGeometry", width: int = 480, n_calib: int = 9
         torso_z=round(z, 4), camera_distance=dist, lookat=lookat.tolist(),
         floor_scale=round((dist - z) / dist, 6),
     ), None
+
+
+# ---------------------------------------------------------------------------
+# The oracle: the policy that GENERATED the data
+# ---------------------------------------------------------------------------
+
+def expert_name(dataset: str) -> str:
+    head = dataset.split("-")[0]
+    if head not in C.EXPERT_FOR:
+        raise ValueError(f"no OGBench expert for {dataset!r} "
+                         f"(have {sorted(C.EXPERT_FOR)})")
+    return C.EXPERT_FOR[head]
+
+
+def load_expert(dataset: str, ob_dim: int, act_dim: int, seed: int = 0):
+    """OGBench's own direction-conditioned expert for this environment family.
+
+    This is not a proxy for an optimal action -- it is *the* policy that produced
+    every action in the dataset. `data_gen_scripts/generate_locomaze.py` runs
+
+        subgoal_xy, _ = env.get_oracle_subgoal(env.get_xy(), env.cur_goal_xy)
+        dir = normalise(subgoal_xy - env.get_xy())
+        action = expert(concat(ob[2:], dir), temperature=0) + N(0, 0.2)
+
+    so feeding it a direction of our choosing gives the action the data generator
+    would have taken to move that way -- a real oracle, not a hand-built heuristic.
+    The observation it takes is the env observation WITHOUT xy (dims 0:2) plus the
+    2-d unit direction, which is the same width for the maze envs.
+
+    ORDERING CONSTRAINT, enforced below: this must be loaded BEFORE
+    `install_residual_arch`. That patch replaces `utils.networks.MLP` for the
+    process, and Flax re-runs `setup()` on every `apply`, so an expert built with
+    the real MLP and applied after the patch would rebuild itself as a residual
+    tower and fail on a parameter-structure mismatch.
+    """
+    from offline import patches
+
+    if patches._ACTIVE_ARCH is not None:
+        raise RuntimeError(
+            "load_expert() called after install_residual_arch(): the expert would be "
+            "rebuilt as a residual tower on its first apply. Load the expert and "
+            "compute its actions BEFORE loading the run's own agent.")
+
+    import json as _json
+    from agents.sac import SACAgent
+    from utils.flax_utils import restore_agent
+
+    name = expert_name(dataset)
+    d = os.path.join(C.EXPERTS_DIR, name)
+    flags_p = os.path.join(d, "flags.json")
+    ckpts = sorted(glob.glob(os.path.join(d, "params_*.pkl")))
+    if not (os.path.exists(flags_p) and ckpts):
+        raise FileNotFoundError(
+            f"no OGBench expert at {d}. It is the policy that generated the data:\n"
+            f"  mkdir -p {C.EXPERTS_DIR} && cd {os.path.dirname(C.EXPERTS_DIR)}\n"
+            f"  curl -fLO {C.DATASET_URL}/experts.tar.gz && tar xzf experts.tar.gz")
+    epoch = os.path.basename(ckpts[-1])[len("params_"):-len(".pkl")]
+    cfg = _json.load(open(flags_p))["agent"]
+
+    # The expert sees (ob minus xy) + a 2-d direction, which is ob_dim wide again.
+    ex_ob = np.zeros((1, ob_dim), dtype=np.float32)
+    ex_ac = np.zeros((1, act_dim), dtype=np.float32)
+    agent = SACAgent.create(seed, ex_ob, ex_ac, cfg)
+    agent = restore_agent(agent, d, epoch)
+    return agent, dict(name=name, dir=d, epoch=epoch,
+                       checkpoint=os.path.basename(ckpts[-1]),
+                       env_name=_json.load(open(flags_p)).get("env_name"))
+
+
+def expert_actions(agent, obs, directions, seed: int = 0):
+    """(N, act_dim) deterministic expert actions for per-state unit directions.
+
+    `temperature=0` makes the policy deterministic, but SAC's `sample_actions` still
+    draws from the (zero-width) distribution, so a key is required: it is fixed, and
+    the result is the distribution's mode either way.
+    """
+    import jax
+    import jax.numpy as jnp
+    inp = jnp.concatenate([jnp.asarray(obs)[:, 2:], jnp.asarray(directions)], axis=-1)
+    a = agent.sample_actions(observations=inp, seed=jax.random.PRNGKey(seed),
+                             temperature=0.0)
+    return np.asarray(jnp.clip(a, -1.0, 1.0))

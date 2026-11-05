@@ -1,6 +1,6 @@
 # `critic_heatmap` — can the critic represent the maze?
 
-**Status:** ready · **Applies to:** CRL · **Reads:** `critic`, `actor` · **Cost:** ~3 min/checkpoint
+**Status:** ready · **Applies to:** CRL · **Reads:** `critic`, `actor` · **Cost:** ~5 min/checkpoint
 
 ## The question
 
@@ -14,16 +14,52 @@ line. This eval measures whether it does, and how that changes with depth.
 
 ## What is computed
 
-For every task goal `g` and every spatial bin of the maze,
+For every task goal `g` and every spatial bin of the maze, `Q(s, a, g)` over real
+states `s` in that bin, reduced over the critic ensemble with `min` because that is
+what the DDPG+BC actor maximises (`q = min(q1, q2)` in `crl.py`) — for **three choices
+of action**:
 
-```
-Q(s, π(s,g), g)      s = real states from the dataset that fall in that bin
+| source | action | the hypothesis it embodies |
+|---|---|---|
+| `policy` | `a = π(s, g)` | what the actor actually does |
+| `oracle_geodesic` | `a = expert(s, u_geo)` | move toward the next shortest-path cell |
+| `oracle_euclid` | `a = expert(s, u_euc)` | move straight at the goal, through walls |
+
+Also available: `dataset` (the logged action) and `random` (a floor).
+
+### The oracle is not a heuristic
+
+`expert` is **OGBench's own direction-conditioned SAC policy — the one that generated
+every action in this dataset.** `data_gen_scripts/generate_locomaze.py` runs
+
+```python
+subgoal_xy, _ = env.get_oracle_subgoal(env.get_xy(), env.cur_goal_xy)
+dir = normalise(subgoal_xy - env.get_xy())
+action = expert(concat(ob[2:], dir), temperature=0) + N(0, 0.2)
 ```
 
-reduced over the critic ensemble with `min`, because that is what the DDPG+BC actor
-maximises (`q = min(q1, q2)` in `crl.py`). Two reference fields are measured at the
-same states: the **dataset's own action** at that state, and (optionally) a **uniform
-random action**. `advantage = policy − dataset` isolates what the policy's choice buys.
+so feeding it a direction of our choosing yields the action the data generator *would
+have taken* to move that way. No hand-built controller, no transplanting an action from
+one state to another, no synthesised state. The checkpoint is `experts/ant`
+(`params_400000.pkl`) from `experts.tar.gz`, and `meta.json` records which one was used.
+
+`u_geo` reproduces `get_oracle_subgoal`'s rule exactly — BFS from the goal cell, step to
+the strictly-closer 4-neighbour — and is **cross-checked against the live env**:
+on task 4 (`start (6,5) → goal (6,1)`) our direction and `env.get_oracle_subgoal`'s
+agree to 1e-6, and the geodesic and straight-line directions there differ by **180°**.
+That is the task GCBC scores 0.00 on.
+
+Verified that the expert actually drives the body: commanding `+x` for 50 steps moves
+the ant `(+5.42, −0.18)`; commanding `+y` moves it `(−0.69, +4.29)`.
+
+### Ordering constraint
+
+The expert is loaded and all its actions computed **before** the run's own agent.
+`install_residual_arch` replaces `utils.networks.MLP` for the whole process and Flax
+re-runs `setup()` on every apply, so an expert applied after the patch would rebuild
+itself as a residual tower and fail on a parameter-structure mismatch.
+`common.load_expert` raises if the patch is already installed, rather than failing
+later with a confusing shape error.
 
 ### States are real, never synthesised
 
@@ -156,18 +192,56 @@ and "the critic" is a fair singular; `ens_gap ~ q_std` means they disagree about
 field and every statement about "the critic" needs to name a member. Stored as a field,
 so you can see *where* they disagree — typically low-coverage regions.
 
+### `action_topology_gain` — logits · the sharp test
+
+`mean( Q[oracle_geodesic] − Q[oracle_euclid] )`, restricted to bins where the two
+directions **disagree by at least `direction_split_deg`** (default 45°).
+
+This is the action-level version of `topology_gain`, and it is the stronger of the two
+because it is measured exactly where the two hypotheses make opposite predictions. In a
+bin where the straight line points into a wall, one of these two actions is right and
+the other is wrong; the critic has to choose. **Positive = it prefers the maze-correct
+action there.**
+
+The restriction matters: in the bins where the two directions nearly agree the two
+actions are nearly the same action, so their difference is noise. Averaging over all
+bins would dilute the signal with bins that cannot speak to it.
+`action_topology_gain_all_bins` is reported too, as a check that the restriction is
+doing what it claims; `split_bin_fraction` says how many bins qualified.
+
+Unlike the ρ-based `topology_gain`, this is in **logits**, so it is not comparable
+across runs in magnitude — only its sign and its trend with depth.
+
+### `oracle_gap` — logits · read it WITH the success rate
+
+`mean( Q[policy] − Q[oracle_geodesic] )`. **The sign alone decides nothing**, and this
+is the metric most likely to be misread:
+
+- DDPG+BC trains the actor to maximise `Q`, so **`> 0` is the default** and by itself
+  only says that extraction worked — the actor found a high-`Q` action.
+- **`< 0`** means the actor is *not* at its own critic's argmax: an **extraction
+  failure**. The critic prefers the maze-correct action and the actor is not taking it.
+- **`> 0` together with low task success** means the critic's preferred action is not
+  the maze-correct one: a **critic failure**. The actor is faithfully maximising a
+  quantity whose maximiser is wrong.
+
+The two failure modes look identical in the success rate and are distinguishable only
+here. `oracle_gap_split_bins` restricts to the disagreeing bins, where the distinction
+is sharpest.
+
 ### The same metrics on the other fields
 
 Every metric is computed for `q_policy`, `q_dataset`, `advantage`, the ensemble-mean
 variants and `ens_gap`, not just the headline field:
 
-- **`q_dataset`** — the same states scored with the action the dataset actually took.
-  If `q_policy` and `q_dataset` have the same topology_gain, the field's structure is a
-  property of `(s, g)` and the policy's action choice adds nothing spatial.
-- **`advantage` = `q_policy − q_dataset`** — where the learned action beats the logged
-  one. `ρ(advantage, −d) > 0` means the policy's edge is largest near the goal;
-  negative means it is largest far away, which is the more interesting case for
-  stitching.
+- **`q_oracle_geodesic` / `q_oracle_euclid`** — the two oracle fields in their own
+  right. If `q_oracle_geodesic` has a much higher `rho_geodesic` than `q_policy`, the
+  critic's spatial structure is clearer under the correct action than under the
+  actor's, which again separates critic quality from extraction quality.
+- **`q_dataset`** (optional) — the logged action, i.e. the same expert aimed at *that
+  trajectory's* goal rather than at ours. Useful as a "typical on-manifold action"
+  reference. `advantage = q_policy − q_dataset` is then where the learned action beats
+  the logged one.
 - **`q_*_dispersion_sd`** — spread of `Q` within a bin, across both the states in it and
   the goal draws. A large value says the bin's single number is hiding structure: the
   critic is using more of the 29-dim state than position.
@@ -213,17 +287,34 @@ geometry, same transform code path, walls drawn as rectangles instead.
 
 | file | contents |
 |---|---|
-| `field.npz` | `q_policy`, `q_dataset`, `advantage`, `q_*_ens_mean`, `q_*_dispersion_sd`, `ens_gap`, `geodesic`, `euclid` — each `(5, Hf, Wf)` — plus `maze`, `fine`, `count`, `occupied` |
-| `metrics.json` | every metric above, per field, per task, plus the across-task mean |
-| `meta.json` | run id, depth, seed, param counts, selection rule and the whole seed set, the state files used, every goal `xy` drawn, timing |
+| `field.npz` | `q_<source>` for each action source, plus `q_*_ens_mean`, `q_*_dispersion_sd`, the difference fields (`oracle_geo_minus_euclid`, `policy_minus_oracle`, `advantage`), `ens_gap`, `dir_angle_deg`, `geodesic`, `euclid` — each `(5, Hf, Wf)` — plus `maze`, `fine`, `count`, `occupied` |
+| `metrics.json` | every metric above, per field, per task, plus the across-task mean; `_cross` holds the between-source metrics (`action_topology_gain`, `oracle_gap`, `split_bin_fraction`) |
+| `meta.json` | run id, depth, seed, param counts, selection rule and the whole seed set, the state files used, every goal `xy` drawn, the expert checkpoint, the render calibration, timing |
 
 `q_*_dispersion_sd` is the spread of `Q` within a bin across both the states in it and
 the goal draws — a large value says the bin's single number is hiding structure.
 
+### Figures
+
+| figure | what |
+|---|---|
+| `fig1_critic_field` | the `q_policy` field, depth × task, on the rendered maze |
+| `fig2_topology` | `rho_geodesic` / `rho_euclid` / `topology_gain` vs depth |
+| `fig4_metrics` | `peak_geodesic` / `path_monotone` / `goal_percentile` vs depth |
+| `fig5_action_preference` | `Q[geodesic] − Q[straight]`, diverging, **only on the disagreeing bins** — the others are drawn pale, because the question does not apply there, which is a different thing from having no data (hatched) |
+| `fig6_action_tests` | `action_topology_gain` and `oracle_gap` vs depth |
+| `fig3_advantage_field` | only if `dataset` is in `action_sources` |
+
 ## How to read it
 
-- **`topology_gain` rising with depth** is the result this eval exists to find: deeper
-  critics encode maze connectivity, which is what stitching needs.
+- **`topology_gain` and `action_topology_gain` rising with depth** is the result this
+  eval exists to find: deeper critics encode maze connectivity, which is what stitching
+  needs. The second is the stronger claim, because it is measured where the two
+  hypotheses disagree.
+- **`action_topology_gain` rising while `topology_gain` is flat** would say the critic's
+  *action* preferences carry the maze even though its *state* value landscape does not
+  — which is the thing the actor consumes, so it would be the better explanation of the
+  success curve.
 - **`topology_gain` flat while success rises** means depth is buying something else, and
   the next place to look is the actor's conditioning, not the critic's geometry.
 - **`peak_geodesic` → 0 with depth** would say the shallow critic's value field peaks in
@@ -244,3 +335,11 @@ the goal draws — a large value says the bin's single number is hiding structur
    if the two disagree about the field's shape, `ens_gap` says where.
 4. **This is not a causal test.** A critic can rank bins correctly and still extract a
    bad policy. The heatmap explains the critic; it does not explain the success rate.
+   `oracle_gap` is the closest thing here to separating the two, and it still needs the
+   success rate beside it.
+5. **The oracle is an expert for the *environment*, not for the task.** It was trained
+   to follow a commanded direction, not to solve these five goals. Feeding it the
+   geodesic direction makes it act optimally *given that direction is right*; it says
+   nothing about whether an even better action exists.
+6. **`action_topology_gain` and `oracle_gap` are in logits**, so they are comparable
+   across depths only in sign and trend, never in magnitude.

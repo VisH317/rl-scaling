@@ -52,6 +52,15 @@ CONFIGS_DIR = os.path.join(EXPERIMENTS_DIR, "configs")
 ANALYSIS_DIR = os.path.join(EXPERIMENTS_DIR, "analysis")
 MANIFEST_DIR = os.path.join(EXPERIMENTS_DIR, "data")
 
+#: OGBench's pretrained locomotion experts -- the SAME direction-conditioned policies
+#: that GENERATED every action in the locomaze datasets (`data_gen_scripts/
+#: generate_locomaze.py`). Downloaded from DATASET_URL/experts.tar.gz (69 MB).
+#: Used by the evals to compute a genuine oracle action for a chosen direction.
+EXPERTS_DIR = os.path.join(SCRATCH_ROOT, "ogbench", "experts")
+
+#: Which expert drives which environment family.
+EXPERT_FOR = {"antmaze": "ant", "humanoidmaze": "humanoid", "antsoccer": "antball"}
+
 DATASET_URL = "https://rail.eecs.berkeley.edu/datasets/ogbench"
 
 

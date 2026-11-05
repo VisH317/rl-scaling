@@ -22,7 +22,18 @@ params:
   min_states_per_bin: 8      # below this a bin is masked, in metrics and in figures
   goal_samples: 8            # goal observations drawn per task (the goal is a
                              # distribution: pose varies, xy varies by +/- unit/4)
-  action_sources: [policy, dataset]   # add `random` for a floor; costs one more sweep
+  # Three fields by default, one per hypothesis about what the critic should value:
+  #   policy           a = pi(s, g)          what the actor actually does
+  #   oracle_geodesic  a = expert(s, u_geo)  toward the next shortest-path cell
+  #   oracle_euclid    a = expert(s, u_euc)  straight at the goal, through walls
+  # `expert` is OGBench's direction-conditioned SAC policy -- the one that GENERATED
+  # every action in this dataset. Also available: `dataset` (the logged action, i.e.
+  # the expert aimed at THAT trajectory's goal) and `random` (a floor).
+  action_sources: [policy, oracle_geodesic, oracle_euclid]
+  # action_topology_gain is measured only on bins where the two oracle directions
+  # disagree by at least this much. Elsewhere they are nearly the same action and
+  # their difference is noise that would dilute the mean.
+  direction_split_deg: 45.0
   # --- presentation ---------------------------------------------------------
   render_maze: true          # top-down MuJoCo render + a MEASURED world->pixel map,
                              # so the field is drawn on the actual maze. Falls back

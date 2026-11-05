@@ -37,7 +37,8 @@ evals:
     params:
       cell_subdiv: 4
       goal_samples: 8
-      action_sources: [policy, dataset]
+      action_sources: [policy, oracle_geodesic, oracle_euclid]
+      direction_split_deg: 45.0
 
   - name: state_probes
     enabled: false               # status: planned -- see its README.md
