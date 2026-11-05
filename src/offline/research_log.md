@@ -1,0 +1,581 @@
+# Research Log: Offline Scaling of Contrastive RL
+
+Companion to [`offline_exp.md`](offline_exp.md). That document is the **plan** (stable); this one is the
+**log** (append-only). Every experiment, verified fact, and decision goes here.
+
+**How to use this log**
+- §1 Verified facts — things checked against code/data/cluster. Each row cites where it came from. Amend in place when re-verified; never delete a corrected fact, strike it and note the correction.
+- §2 Decisions — numbered, dated, with status. Once `SETTLED`, don't relitigate without a new dated entry.
+- §3 Open questions — blocking vs non-blocking.
+- §4 Current plan — what's next. Rewritten each session.
+- §5 Experiment log — append-only, one entry per run batch. Newest at the bottom.
+
+---
+
+## 1. Verified facts
+
+### 1.1 Cluster (Princeton Stellar)
+
+| Fact | Value | Source |
+| --- | --- | --- |
+| Login node | `stellar-intel`, no GPU, system Python 3.6.8 | `hostname`, `nvidia-smi` |
+| GPU hardware | A100 **40 GB** (not 80 GB) | `sinfo`, RC docs |
+| GPU nodes | 1× (8 GPU, 56 core, 1000 GB RAM) + 6× (2 GPU, 128 core, 550 GB RAM) | `sinfo -o "%P %G %D %c %m"` |
+| GPU QOS | 7-day limit, **2 running jobs**, **8 GPUs**, 2 nodes per user | `qos` |
+| Slurm account | `mae` | `sshare -U` |
+| Home quota | 93 GB limit, 23.8 GB used | `checkquota` |
+| Scratch quota | `/scratch/gpfs/vt7993`, 1000 GB limit, 17.6 GB used | `checkquota` |
+| Download bandwidth | ~40 MB/s from `rail.eecs.berkeley.edu` | timed `curl` |
+| Env managers | `uv` and `pixi` on PATH; `anaconda3/*` modules available; no `conda` on PATH | `which`, `module avail` |
+
+> **Corrects the brief:** it assumes an 80 GB A100 (the 1000-layer paper's hardware). Stellar has 40 GB.
+> Not a problem at width 256 (~12M params), but it rules out naively copying any memory-bound config.
+
+**Added 2026-11-05, both discovered by hitting them during submission:**
+
+| Fact | Consequence |
+| --- | --- |
+| `stellar-k09g1`, the only 8-GPU node, is in state `inval` (down). Six 2-GPU nodes remain. | A single-node 4-GPU request is **unschedulable** (`ReqNodeNotAvail`). `gpus_per_job=2` → 6 runs/pack, **12 concurrent, not 24**. Re-check `sinfo -p gpu` before raising. |
+| Maintenance is reserved for the second Tuesday monthly (next **2026-11-10, 06:00–14:00**). Slurm will not start a job that cannot finish before a reservation. | A `--time=7-00:00:00` request sits PENDING with `Reserved for maintenance`. `time_limit=24:00:00` schedules immediately. Any run needing >5 days must wait until after the window. |
+| EGL rendering **works** on the GPU nodes (resolves Q5). | Videos are available if wanted; `video_episodes=0` remains the default since state-based eval does not need them. |
+| GPU QOS throttles *running* jobs only; PENDING jobs are unlimited. | The whole grid can be submitted at once with `afterany` chaining and self-sequences with **no live watcher**. |
+
+**Unverified / to check:** whether compute nodes have outbound internet. If they don't,
+`ogbench.make_env_and_datasets` auto-download fails inside a job. Pre-download everything and always
+pass explicit `dataset_path=` regardless. Large downloads should use `stellar-vis1` per RC docs.
+
+### 1.2 Data (measured, not assumed)
+
+Downloaded to `/scratch/gpfs/vt7993/ogbench/data`. **Do not** use the `~/.ogbench/data` default — home quota.
+
+| Dataset | Rows | Trajs × states | Transitions | ob / act | Disk |
+| --- | --- | --- | --- | --- | --- |
+| `antmaze-medium-stitch-v0` | 1,005,000 | 5,000 × 201 | 1,000,000 | 29 / 8 | 245 MB ✅ have |
+| `antmaze-medium-stitch-v0-val` | 100,500 | 500 × 201 | 100,000 | 29 / 8 | 25 MB ✅ have |
+| `cube-double-play-100m-v0` shard | 1,001,000 | 1,000 × 1001 | 1,000,000 | 37 / 5 | 297 MB ✅ have 000 |
+| `cube-double-play-100m-v0` shard `-val` | 100,100 | 100 × 1001 | 100,000 | 37 / 5 | 30 MB ✅ have 000 |
+
+Verified structural facts:
+- **Standard OGBench datasets are exactly 1M transitions**, not "1M–5M" as the brief states.
+- **Trajectory length is uniform within a dataset.** Subsampling whole trajectories is a reshape, not a
+  boundary-detection problem. `terminals` is `bool`, `1` on the last row of each trajectory; the final
+  file row is terminal. This closes the brief's open check on trajectory boundaries.
+- Rows ≠ transitions: the last state of each trajectory has no successor. 1001 rows → 1000 transitions.
+- **100M datasets are sharded directories**, not single files:
+  `https://rail.eecs.berkeley.edu/datasets/ogbench/<name>-100m-v0/<name>-v0-{000..099}.npz`, each shard a
+  self-contained 1M-transition npz with its own `-val` sibling. 11 such datasets exist; `cube-double-play-100m-v0`
+  (the brief's proposed grid task) is confirmed present. Generated with `--seed=$i` per shard → shards are i.i.d.
+- Files carry **`qpos` / `qvel`** beyond `observations`/`actions`/`terminals`; `ogbench` strips them unless
+  `add_info=True`. ~45% of file size.
+
+### 1.3 What `qpos` / `qvel` are, and why we keep them
+
+MuJoCo generalized coordinates — the raw simulator state. `qpos` is every position DOF (free body = 7:
+xyz + quaternion; hinge = 1); `qvel` the matching velocities (free body = 6: linear + angular).
+
+| Task | `qpos` | `qvel` | Relation to `observations` |
+| --- | --- | --- | --- |
+| `antmaze-medium-stitch` | 15 (torso 7 + 8 hinges) | 14 (6 + 8) | **`observations == concat(qpos, qvel)` exactly** (verified) — pure redundancy |
+| `cube-double-play` | 28 (14 arm/gripper + 2 cubes × 7) | 26 (14 + 2 × 6) | 54 ≠ 37 — the observation is a processed view; `qpos` carries strictly more |
+
+**Keep `qpos`/`qvel` in the cube-double subsets.** Three hard dependencies:
+1. Cube positions are only cleanly addressable via `qpos` — `ogbench/relabel_utils.py` indexes cube *i* as
+   `qpos[14 + 7i : 14 + 7i + 3]`. Phase-0's "distinct object configurations" coverage stat runs on this.
+2. **Probe 3 needs them.** The brief compares the critic exploitation gap "with actual success from those
+   states" — that means rolling out from held-out *dataset* states, which requires setting the simulator
+   state. A 37-dim processed observation cannot; `(qpos, qvel)` can.
+3. `-oraclerep` is built from `qpos` (`add_oracle_reps`). Every Horizon Reduction published command uses
+   `-oraclerep` env names, so dropping `qpos` forecloses comparison against their numbers.
+
+For antmaze they're reconstructable (split the observation at index 15), so dropping them is safe there —
+but at 245 MB there's no reason to.
+
+### 1.4 Environments
+
+Both instantiate headless on a login node (state-based only; a GLFW/X11 warning is harmless).
+
+| Env | ob | act | `max_episode_steps` | Tasks |
+| --- | --- | --- | --- | --- |
+| `antmaze-medium-stitch-v0` | 29 | 8 | 1000 | `task1`…`task5` |
+| `cube-double-play-v0` | 37 | 5 | 500 | `task1_single_pnp`, `task2_double_pnp1`, `task3_double_pnp2`, `task4_swap`, `task5_stack` |
+
+5 evaluation goals per task, confirmed via `env.unwrapped.task_infos`. Horizon Reduction's `main.py`
+default is `eval_episodes=15` per task, `eval_interval=250000`, `video_episodes=1`.
+
+**Rendering:** `MUJOCO_GL=egl` failed on the login node (no GPU — expected). Untested on a GPU node.
+State-based training needs no rendering; set `--video_episodes=0` to sidestep it entirely.
+
+> **Horizon caveat worth stating before interpreting probes:** `antmaze-medium-stitch` trajectories are
+> 201 states, so the **maximum in-trajectory temporal distance for a CRL positive is 200**, while the eval
+> horizon is 1000. Probe distance bins cap at 200 on the phase-1 baseline. This is intrinsic to the
+> `stitch` dataset type and is arguably the point of it, but it means phase-1 cannot test H-horizon at
+> the horizons the task actually demands.
+
+### 1.5 Does OGBench implement stable-CRL? **No — but it is 5 lines away**
+
+OGBench has `impls/agents/crl.py` and `impls/agents/gcbc.py`. There is no stable-CRL agent. However,
+OGBench's CRL critic loss *already is* stable-CRL's loss. Verified side by side:
+
+| | scaling-crl (1000-layer, **online**) | OGBench `crl.py` (**offline**) | stable-CRL (Zheng 2023) |
+| --- | --- | --- | --- |
+| Critic loss | **InfoNCE**: `-mean(diag - logsumexp(axis=1))` | **binary NCE**: `sigmoid_BCE(logits, I)` over B×B | **binary NCE**: `BCEWithLogitsLoss(logits, I)` |
+| Logits | `-‖φ-ψ‖₂` (L2) | `φ·ψ / √d` (dot) | `φ·ψ` (dot) |
+| Logsumexp penalty | **yes**, coeff 0.1 | **no** | **no** |
+| Architecture | residual blocks, Swish, LN | plain MLP, **GELU**, LN *after* activation | plain MLP, LN |
+| Depth / width | depth 4 default, width 256 (CLI default) | 3 × 512 | 4 × 1024 ("shallow and wide") |
+| Repr dim | **64** (hardcoded `Dense(64)`) | **512** (`latent_dim`) | **16** |
+| Final-layer init | `lecun_uniform` everywhere | `default_init(1.0)` | **`init_w = 1e-12`** (cold) |
+| Batch | 256 | 1024 | **2048** |
+| lr | — | 3e-4 | 3e-4 |
+| BC term | — | `ddpgbc`, `alpha = 0.1` | `bc_coef = 0.05` |
+| Critic ensemble | 1 | 2 | 2 |
+| Augmentation | — | `p_aug = 0.0` | crop, p = 0.5 (images only) |
+
+Sources: `wang-kevin3290/scaling-crl/train.py`; `seohongpark/ogbench/impls/agents/crl.py` + `utils/networks.py`;
+`chongyi-zheng/stable_contrastive_rl` (`experiments/train_eval_stable_contrastive_rl.py`,
+`rlkit/torch/sac/stable_contrastive_rl_trainer.py`).
+
+Consequences:
+- **"Stable-CRL on OGBench" is a small patch to `crl.py`**, not a port: set `latent_dim=16`,
+  `batch_size=2048`, `alpha=0.05`, and cold-init the φ/ψ final layers at 1e-12. LayerNorm, lr, the
+  2-critic ensemble, the BC term and the loss form are already right.
+- **Stable-CRL's own codebase is PyTorch/rlkit**, not JAX — correcting the brief's "All of these are JAX."
+  It needs conda, two external env repos (`bullet-manipulation`, `multiworld`) and a Google Drive dataset.
+  Not viable as the grid base.
+- The 1000-layer paper's **residual architecture does not exist in OGBench.** `utils/networks.py` `MLP`
+  is plain feedforward with GELU and no skip connections. It must be written. Exact target
+  (from `scaling-crl/train.py`):
+
+  ```
+  residual_block(x, width):           # 4 dense layers per block
+      identity = x
+      4 ×  [ Dense(width, lecun_uniform) → LayerNorm → Swish ]
+      return x + identity
+
+  tower(x):
+      Dense(width) → LayerNorm → Swish  # stem
+      (depth // 4) × residual_block     # "depth" = dense layers in the residual stack
+      Dense(repr_dim)                   # no norm, no activation
+  ```
+
+### 1.6 No stable-CRL results exist on OGBench
+
+Checked and did not find any. Stable-CRL (arXiv 2306.03346, June 2023) **predates OGBench** (arXiv
+2410.20092, Oct 2024) and evaluates on image-based `bullet-manipulation` Sawyer drawer/pick-place tasks
+from the RIG line of work, not on OGBench. OGBench's own benchmark tables report CRL, not stable-CRL.
+
+**So there is no published stable-CRL number on OGBench to reproduce.** Phase 1's reproduction targets
+must be (a) OGBench's published CRL number on the chosen task, and (b) the 1000-layer rebuttal's GCBC
+depth curve (0.47 → 0.63, depth 2 → 32, `antmaze-medium-stitch`). If you have the rebuttal's CRL-by-depth
+numbers or any internal stable-CRL-on-OGBench results, drop them in §5 — they'd change the baseline.
+
+
+### 1.7 Experiment controls, in full
+
+Everything below is in `src/offline/config.py` and is written into every run's
+`config.json`, so a run is reproducible from its own config plus the recorded commit hash.
+
+#### Optimizer — plain constant-LR Adam, deliberately (decision D9)
+
+Verified at `OGBench impls/agents/crl.py:285` and `scaling-crl/train.py:541,556`: both
+references use `optax.adam(learning_rate=lr)` with **no schedule, no warmup, no gradient
+clipping, no weight decay**.
+
+| Control | Value | Note |
+| --- | --- | --- |
+| optimizer | `adam` | `adamw` available but unused |
+| learning rate | **3e-4, constant** | identical in all three reference codebases |
+| actor / critic lr | both 3e-4 | kept separable for phase 5's actor thread |
+| β₁, β₂, ε | 0.9, 0.999, 1e-8 | optax defaults, stated explicitly rather than inherited |
+| schedule | `constant` | `cosine` / `linear_warmup_cosine` implemented, **off** |
+| warmup steps | 0 | |
+| gradient clipping | **none** | `clip_by_global_norm` available, off |
+| weight decay | 0 | |
+
+This matters for interpreting the result: the 1000-layer paper's stability at extreme
+depth came from the **architecture** (LayerNorm + residual connections), not from
+optimizer tricks. Warmup and clipping help deep networks *specifically*, so switching
+either on would confound the very axis under test. `OptimConfig.deviates_from_baseline()`
+returns a list of any departures and is recorded in each run config as
+`optim_deviations`, so a deviation can never happen silently.
+
+#### Architecture
+
+| Control | Value |
+| --- | --- |
+| tower | `residual` (`mlp` = the non-residual control) |
+| depth | 4, 8, 16, 32 (phase 1) · 4, 8, 16, 32, 64 (grid) — dense layers in the residual stack, stem and head excluded |
+| block size | 4 dense layers per residual block, so depth must be divisible by 4 |
+| width | 256 |
+| repr dim | 64 (scaling-crl) — **open question Q2** |
+| norm | LayerNorm, **pre-activation** (`Dense → LN → Swish`) |
+| activation | Swish |
+| init | `lecun_uniform` on every Dense; `cold` (1e-12 head) is a separate opt-in |
+
+Depth 2 from the rebuttal is not expressible with 4-layer blocks, so our floor is depth 4.
+
+#### Algorithm
+
+| Control | CRL | GCBC |
+| --- | --- | --- |
+| batch size | 1024 (`recipe="stable"` → 2048) | 1024 |
+| discount | 0.99 | 0.99 (goal sampling only) |
+| actor loss | `ddpgbc`, `alpha` = 0.1 (`stable` → 0.05) | — |
+| critic loss | `binary_nce` + dot logits, no logsumexp penalty — **open question Q1** | — |
+| critic ensemble | 2 | — |
+| goal sampling | `value_p_trajgoal` 1.0, `value_geom_sample` True; `actor_p_trajgoal` 1.0, `actor_geom_sample` False | same actor settings |
+| const std | True | True |
+
+#### Training length — the brief's key protocol decision
+
+Horizon Reduction trained every run for a fixed 5M steps regardless of dataset size, so
+larger datasets got fewer passes per sample, which can manufacture a data plateau.
+Instead: **stop on an evaluation plateau, under a cap that grows with dataset size.**
+
+| Dataset size | Step cap | Epochs over data at the cap (batch 1024) |
+| --- | --- | --- |
+| 0.1M | 500,000 | 5,120 |
+| 0.3M | 1,000,000 | 3,413 |
+| 1M | 2,000,000 | 2,048 |
+| 3M | 3,000,000 | 1,024 |
+| 10M | 5,000,000 | 512 |
+
+Plateau rule: stop after `plateau_patience`=5 consecutive evaluations with no improvement
+greater than `plateau_min_delta`=0.01. Every run records best success, the step it
+occurred at, total gradient steps, epochs over data, samples seen, wall-clock and peak
+RSS, so a compute-optimal analysis is possible afterwards even though the protocol is
+data-limited. Batch size, lr and optimizer are held fixed across the whole grid.
+
+#### Checkpointing — where and what
+
+Mechanism is OGBench's `utils/flax_utils.py`: `flax.serialization.to_state_dict(agent)`
+pickled to `params_<tag>.pkl`. The pickle holds params **and Adam optimizer state**, so a
+restore resumes training exactly; it is not a weights-only export.
+
+| What | When | Why |
+| --- | --- | --- |
+| `params_best.pkl` | overwritten whenever eval success improves | **Phases 2 and 5 depend on this.** The probes characterize a *good* critic and the actor thread freezes one — OGBench's own `main.py` saves only periodically and would lose it. |
+| `params_final.pkl` | last step reached | resume a plateau-stopped run |
+| `params_<step>.pkl` | every 500k steps, 2 most recent kept | crash recovery |
+
+Per-run layout under `experiments/runs/<run_id>/`: `config.json` (resolved config +
+commit hash), `train.csv`, `eval.csv`, `metrics.jsonl`, `status.json` (heartbeat every
+5,000 steps), `summary.json` (written once at completion — its presence is what marks a
+run done), `driver.log`, `checkpoints/`, `probes/`.
+
+#### Evaluation
+
+| Control | Value |
+| --- | --- |
+| protocol | OGBench standard: 5 goals per task, `task_id` 1–5 |
+| episodes per task | 15 → **75 episodes per evaluation** |
+| reported metric | mean success over the 5 tasks, plus per-task breakdown |
+| eval temperature | 0.0 (deterministic) |
+| eval interval | every 100,000 gradient steps |
+| videos | 0 (EGL works, but state-based eval does not need rendering) |
+| episode length | antmaze-medium-stitch 1000 · cube-double-play 500 |
+
+---
+
+## 2. Decisions
+
+| # | Decision | Status | Date | Rationale |
+| --- | --- | --- | --- | --- |
+| D1 | Keep `qpos`/`qvel` in cube-double subsets | **SETTLED** | 2026-11-04 | Probe 3 and coverage stats require them (§1.3). Cost is negligible. |
+| D2 | GCBC = OGBench `impls/agents/gcbc.py` | **SETTLED** | 2026-11-04 | User decision. Horizon Reduction has no plain GCBC (only `gcfbc.py`, flow BC). |
+| D3 | Dataset dir = `/scratch/gpfs/vt7993/ogbench/data` | **SETTLED** | 2026-11-04 | Home quota is 93 GB; the `~/.ogbench/data` default would consume it. |
+| D4 | Grid task = `cube-double-play-100m-v0` | PROPOSED | — | Brief's proposal; availability now confirmed. |
+| D5 | Nested subsets = **shard-aligned** (§2.1) | **SETTLED** | 2026-11-05 | Vish's call. Keeps the 1M cell a standard whole dataset (free reproduction check), needs no new files for 1M/3M/10M, and the seed-spread confound it gives up is negligible across 10 i.i.d. shards. |
+| D6 | Codebase = OGBench `impls` + our patches | **SETTLED** | 2026-11-05 | Implemented and verified end-to-end on an A100 (see `impl_log.md` I5–I7). Has both CRL and GCBC (D2); residual tower injected via `patches.py`; agents themselves left unmodified so published defaults stay diffable. |
+| D9 | Optimizer stays plain constant-LR Adam | **SETTLED** | 2026-11-05 | Matches both references exactly (§1.7). Warmup/clipping help deep nets specifically, so enabling them would confound the depth axis. |
+| D10 | `gpus_per_job=2`, `time_limit=24h` | **SETTLED** | 2026-11-05 | Forced by the cluster, not chosen (§1.1). |
+| D7 | Loss form for the depth test (see §3, Q1) | **NEEDS CALL** | — | InfoNCE+L2+logsumexp vs binary NCE+dot. Confounds the depth result. |
+| D8 | Representation dim | **NEEDS CALL** | — | 64 (scaling-crl) vs 512 (OGBench) vs 16 (stable-CRL). Interacts with depth. |
+
+### 2.1 D5 — the 1M-cell decision, explained
+
+The grid needs dataset sizes 0.1 / 0.3 / 1 / 3 / 10M, **nested** (each a subset of the next) so that
+differences come from size and not from which trajectories got drawn. Source pool = shards 000–009 =
+10,000 trajectories × 1000 transitions.
+
+Two constructions, **both of which are genuinely nested** — nesting is not the discriminator:
+
+**Option A — global permutation.** Shuffle all 10,000 trajectory ids once under a fixed seed; take the
+first 100 / 300 / 1,000 / 3,000 / 10,000. The 1M cell is then ~100 trajectories drawn from *each* of the
+10 shards.
+
+**Option B — shard-aligned.** 0.1M / 0.3M = first 100 / 300 trajectories of shard 000 (after a fixed-seed
+shuffle *within* the shard); 1M = all of shard 000; 3M = shards 000–002; 10M = shards 000–009.
+
+What actually differs:
+
+| | Option A | Option B |
+| --- | --- | --- |
+| Nested? | yes | yes |
+| 1M cell is a standard whole dataset? | no (10-shard mixture) | **yes** — enables a free apples-to-apples check against published 1M numbers, i.e. brief rule #2 "reproduce before modifying" |
+| Works with HR's `--dataset_dir` + `--num_datasets k` | no — every cell needs a new materialized npz | **yes** for 1M/3M/10M with zero new code |
+| Generation-seed spread | shard idiosyncrasies spread evenly across all cells | each size step adds exactly one generation seed; an anomalous shard enters at one size and persists in all larger cells |
+
+The last row is the only real argument for A, and it is weak: shards are i.i.d. by construction
+(`--seed=$i`, same scripted policy, same env), and there are 10 of them.
+
+**Recommendation: Option B.** It buys a free pipeline-validation check at the 1M cell, costs no new files
+for 1M/3M/10M, and the confound A guards against is negligible. The one thing to pin down: shuffle
+*within* shard 000 under a fixed seed before taking the 0.1M/0.3M prefixes, rather than trusting file
+order.
+
+Caveat to record either way: the standalone `cube-double-play-v0.npz` (the standard 1M release) is **not**
+necessarily byte-identical to shard 000 — both are 1M/1000 trajectories but likely from different
+generation seeds. Verify before claiming an exact reproduction.
+
+---
+
+## 3. Open questions
+
+**Blocking (answer changes what we build):**
+
+- **Q1 — Which critic loss does the depth test use?** The 1000-layer depth result was obtained with
+  InfoNCE + L2-distance logits + a logsumexp penalty (coeff 0.1). Both offline codebases use binary NCE +
+  dot-product logits and **no** logsumexp penalty. If we drop the residual architecture into OGBench and
+  keep binary NCE, we are not testing the 1000-layer recipe — we're testing residual blocks under a
+  different objective, and a null result wouldn't be attributable. Options: (a) port InfoNCE + logsumexp
+  into `crl.py` to match the online recipe exactly, (b) keep binary NCE to match the offline recipe and
+  state the deviation, (c) run both at depths 4 and 32 as a 4-run pilot and let the data decide.
+  Note the brief's own background paragraph describes InfoNCE + logsumexp, i.e. the **online** code, while
+  proposing to build on offline code that does neither.
+- **Q2 — Representation dim (D8).** Three codebases, three values: 16 (stable-CRL, which explicitly found
+  16 ≫ 128/512), 64 (scaling-crl), 512 (OGBench). Stable-CRL's finding was on *images*; whether it
+  transfers to 37-dim states is unknown. A narrow bottleneck may also interact with depth, which is the
+  axis under test. Suggest pinning one value across the whole grid and noting it, with a small ablation at
+  one cell.
+- **Q3 — Codebase confirmation with Chongyi (D6).** Also worth asking directly whether any internal
+  stable-CRL-on-OGBench results exist (§1.6), and whether the online sanity check (phase 1a) is needed.
+
+**Non-blocking:**
+
+- Q4 — Do compute nodes have internet? (Pre-downloading makes this moot, but good to know.)
+- ~~Q5 — Does `MUJOCO_GL=egl` rendering work on a Stellar GPU node?~~ **RESOLVED 2026-11-05: yes**, verified in the smoke test on `stellar-m01g2`. Videos are available; `video_episodes=0` stays the default.
+- ~~Q6 — Evaluation interval and gradient-step cap.~~ **RESOLVED 2026-11-05**: see §1.7 "Training length". Revisit if phase-1 runs are still improving at their cap.
+
+---
+
+## 4. Current plan
+
+### 4.0 What is running right now (2026-11-05, ~00:40)
+
+| Job | What | State |
+| --- | --- | --- |
+| 2993241 | GPU smoke test (9 checks) | RUNNING on `stellar-m01g2`, checks 1–6 PASS |
+| 2993251 | pack: CRL+GCBC depth 16, seeds 0–2 | RUNNING on `stellar-m01g3` (6 runs, 3/GPU) |
+| 2993246, 2993247, 2993252 | the remaining 18 phase-1 runs | PENDING, gated `afterok:2993241` |
+
+Phase 1 is 24 runs in 4 packs of 6; at most 2 packs run at once (QOS), so it self-sequences
+in two waves. Nothing needs a live watcher.
+
+**To check in the morning:**
+```bash
+cd /home/vt7993/rl-scaling
+V=/scratch/gpfs/vt7993/rl-scaling/venv/bin/python
+$V src/scripts/monitor.py --grid phase1_repro          # exit 2 = needs a human
+$V src/scripts/plot_results.py --grid phase1_repro     # figures + csv tables
+$V src/scripts/submit_packs.py --grid phase1_repro --chain   # requeue anything that died
+```
+Figures land in `experiments/analysis/phase1_repro/`.
+
+### 4.1 Data collection plan — what every run records
+
+Three layers, all machine-readable, so no analysis depends on scraping stdout.
+
+**Per evaluation** (`eval.csv`, every 100k steps):
+`eval/success` (mean over 5 tasks), `eval/task{1..5}/success`, `samples_seen`, `epochs`,
+`eval_secs`. The per-task breakdown matters because the 5 goals differ in difficulty —
+on cube-double, `task5_stack` is much harder than `task1_single_pnp`, so a flat mean can
+hide the whole effect of depth.
+
+**Per log interval** (`train.csv`, every 10k steps) — train **and** validation side by
+side, which is what makes the overfitting probe (brief probe 7) free:
+`train/contrastive_loss`, `train/categorical_accuracy` (InfoNCE top-1),
+`train/binary_accuracy`, `train/logits_pos`, `train/logits_neg`, `train/v_mean|max|min`,
+`train/actor_loss`, and `val/*` for all of them. Plus `samples_seen`, `epochs`,
+`steps_per_s`, `peak_rss_gb`.
+
+**Per run** (`summary.json`, once): `best_success` and `best_step`, `stop_reason`
+(`plateau` vs `cap_reached` — if most runs say `cap_reached` the caps are too low and the
+data-limited claim is unsupported), `gradient_steps`, `samples_seen`,
+`epochs_over_data`, parameter counts per network, `wall_clock_s`, `train_secs`,
+`data_load_secs`, `peak_rss_gb`, `devices`, `code_commit`, and the full `data_info`
+(file list, rows, trajectories, **valid transitions**, ob/act dims, bytes in RAM).
+
+Why each matters: `params` is `N` in the scaling fit (not depth); `epochs_over_data`
+separates data-limited from compute-limited; `stop_reason` validates the protocol;
+`data_info.n_transitions` pins `D` unambiguously; `code_commit` makes the run
+reproducible.
+
+**Phase 2 probes** (not yet implemented, next on the list) write to
+`runs/<run_id>/probes/`, every one **binned by temporal distance** between state and
+goal. Caveat already recorded: on antmaze-medium-stitch the maximum in-trajectory
+distance is 200 while the eval horizon is 1000, so phase-1 probe bins cap at 200.
+
+### 4.2 Evaluation plan
+
+OGBench's standard protocol, unmodified: 5 goals per task, `task_id` 1–5, 15 episodes
+each = **75 episodes per evaluation point**, deterministic actor (`temperature=0`).
+Reported metric is the mean success over the 5 tasks, with the per-task breakdown kept.
+
+Evaluation runs every 100k gradient steps, which serves three purposes at once: it drives
+the plateau-stopping rule, it gives learning curves rather than a single endpoint, and it
+identifies the best checkpoint that phases 2 and 5 need.
+
+Two deliberate choices: **best** success over training is the headline number, not final
+(the brief asks for best and its step, and offline runs can degrade late); and
+**validation trajectories are a fixed set that never scales with training size**, so
+probe numbers stay comparable across grid cells.
+
+The phase-1 success criterion is not "CRL beats GCBC" — it is reproducing a **negative**
+result. Expected: CRL roughly flat across depth 4→32, GCBC rising (rebuttal: 0.47→0.63
+over depth 2→32). **If CRL does scale here, stop and report** — per the brief, that alone
+changes the project.
+
+### 4.3 Visuals plan
+
+Five figures, each with a `.csv` beside it (static PNGs have no hover layer, so the table
+is the accessibility channel). Colors are the dataviz reference palette, used unchanged.
+
+| Figure | Form | The question it answers |
+| --- | --- | --- |
+| `fig1_success_vs_depth` | 2-series line, log₂ depth, SD error bars + per-seed dots | **The headline.** Does depth help, and does CRL differ from GCBC? The rebuttal's values appear as grey annotations, never as a series, so paper numbers are never mistaken for ours. |
+| `fig2_learning_curves` | small multiples (one panel per agent), one line per depth from the ordinal blue/orange ramp, min–max band over seeds | Is a flat result real, or just a run stopped too early? Also shows whether deep runs are slower *per step* or genuinely worse. |
+| `fig3_critic_diagnostics` | 3 panels, one axis each | Does the critic improve with depth even when success doesn't? That is the H-actor signature. Train-vs-val contrastive loss on the same axes is the H-data overfitting read. |
+| `fig4_cost` | 3 panels: params, steps/s, wall-clock vs depth | Depth is never read without its price; also the input to sizing phases 3–4. |
+| `fig5_depth_data_heatmap` | sequential one-hue heatmap, direct value labels | Phases 3–4: success over depth × dataset size, per algorithm. Auto-skipped when only one size is present. |
+
+Design rules held throughout: **no dual axes** anywhere; sequential encodings are one hue
+light→dark (never a rainbow); legend always present with direct labels for ≤4 series;
+recessive hairline grid; text in ink tokens rather than series colors.
+
+Still to build for phase 4: best-depth-per-dataset-size (the headline H-data plot) and the
+parametric fit `Err(N,D) = E + A/N^α + B/D^β` with bootstrap-over-seed intervals. Both
+need the grid to exist first.
+
+### 4.4 Phase 0 — remaining steps
+
+| Step | Action | Status |
+| --- | --- | --- |
+| 0.1 | venv at `/scratch/gpfs/vt7993/rl-scaling/venv`, Python 3.11, `jax[cuda12]==0.4.38`; GPU-validated by the smoke test | **done** |
+| 0.2 | `src/scripts/download_datasets.py` | **done** |
+| 0.3 | All planned downloads complete (4.36 GB) | **done** |
+| 0.4 | Manifest script (`dataset_manifest.py`) — partly covered already: `datasets.py` records rows/trajs/transitions/dims per run | todo |
+| 0.5 | `build_subsets.py` implementing D5 — only the 0.1M and 0.3M cells need materializing; 1M/3M/10M are whole shards | todo (D5 now settled) |
+| 0.6 | Fix the held-out set: **constant across every grid cell**, never scaled with train. Candidates: shard 000's val (100 trajs / 100K transitions) or the union of 10 val shards (1,000 trajs / 1M) | todo |
+| 0.7 | Coverage stats per subset: cube-double → cube xyz from `qpos` (distinct configurations + grid occupancy); antmaze → `ob[:2]` xy grid occupancy | todo |
+| 0.8 | Write down `D` = **valid transitions**, not rows (§1.2), so the fit's x-axis is unambiguous | todo |
+| 0.9 | Repo layout per the brief: `experiments/{data,configs,runs,analysis}` | todo |
+
+**Environment downloads needed — final list.** Total under 4 GB; nothing in "ask first" territory.
+
+| Phase | Dataset | Files | Size | Status |
+| --- | --- | --- | --- | --- |
+| 1 | `antmaze-medium-stitch-v0` | train + val | 270 MB | ✅ |
+| 1 (opt.) | `antmaze-medium-navigate-v0`, `antmaze-large-navigate-v0` | train + val each | ~255 MB each | ✅ |
+| 3–4 | `cube-double-play-100m-v0` **shards 000–009 only** | 10 train + 10 val | 3.27 GB | ✅ |
+| D5 check | `cube-double-play-v0` (standard 1M release) | train + val | 312 MB | ✅ |
+| backup | `puzzle-4x4-play-100m-v0` or `scene-play-100m-v0`, shards 000–009 | — | ~3 GB | deferred |
+
+**All planned data downloaded 2026-11-05** — 28 files, 4.36 GB, at ~40 MB/s, into
+`/scratch/gpfs/vt7993/ogbench/data`. Deferred set (the other 90 cube-double shards plus
+backup tasks) is 35 GB and only needed for a 100M-scale final run.
+
+The grid tops out at 10M, so **10 of 100 shards suffice** — not the full ~31 GB. Not needed at all:
+`cube-octuple`, `puzzle-4x5`/`4x6`, `humanoidmaze-giant`, any `visual-*`, `experts.tar.gz`.
+
+### 4.5 Code work, in dependency order
+
+1. **Residual tower** (§1.5) as a drop-in alongside `MLP` in `utils/networks.py`, with `depth` and `width`
+   flags, used by `GCBilinearValue`'s φ/ψ and by `GCActor`. Count parameters programmatically — `N` in
+   the scaling fit is parameters, not depth.
+2. **Stable-CRL patch** to `crl.py`: `latent_dim`, `batch_size`, `alpha`, cold final-layer init. Gate each
+   behind a flag so they can be toggled one at a time (brief rule #3).
+3. **Loss switch** in `crl.py` once Q1 is answered: binary-NCE (current) vs InfoNCE + L2 + logsumexp penalty.
+4. **Dataset-path plumbing**: accept an explicit subset npz via `dataset_path=`, never auto-download.
+5. **Logging** per brief: best success + its step, gradient steps, epochs over data, wall-clock, peak
+   memory, parameter count, dataset subset id, code commit hash.
+
+### 4.6 Slurm: the scheduling problem
+
+The QOS cap is the binding constraint: **2 running jobs, 8 GPUs, 2 nodes**. The corner grid alone is
+54 runs; the full grid is 150. Naive one-run-per-job means 2 runs at a time.
+
+Three things make this tractable, in order of leverage:
+
+1. **Pack many runs per job.** These networks are tiny — depth 64 × width 256 is ~12M parameters across
+   both φ/ψ towers and the actor. A 40 GB A100 is nowhere near the limit. Run several processes per GPU
+   with `XLA_PYTHON_CLIENT_MEM_FRACTION` set (JAX preallocates 75% by default — must override or the
+   first process takes the card). Budget: 2 jobs × 4 GPUs × 3 runs/GPU ≈ **24 concurrent runs** at the
+   QOS cap, versus 2 naively.
+2. **Watch RAM, not VRAM.** Each process holds its own dataset copy. 10M cube-double with `qpos`/`qvel` is
+   ~3.85 GB in RAM (~1.69 GB without), and `compact_dataset=True` avoids duplicating `next_observations`.
+   12 processes × 3.85 GB ≈ 46 GB — fine on a 550 GB or 1000 GB node, but it's the real ceiling on packing
+   density, so compute it per cell rather than assuming.
+3. **Keep the queue topped up automatically.** A job array (`sbatch --array=0-53%2`) throttles to the
+   2-job cap, so the array is the wrong unit — the *pack* is. Use a small submitter that maintains a
+   run manifest (one row per grid cell × seed, with status), and on each invocation submits packs for
+   pending runs up to the cap, with `--dependency=afterany` chains so a finishing job pulls the next pack.
+   Driven either by a cron entry or by `/loop`. The 7-day wall limit is generous relative to 2–5 h runs,
+   so prefer long jobs holding many sequential packs over many short jobs.
+
+Set memory explicitly in every script — Stellar's 7500 MB/core default breaks on the AMD GPU nodes
+(512/128 = 4 GB/core, so `--mem-per-cpu=4000M`).
+
+**Time one depth-64 × 10M run before launching anything** (brief's instruction) and multiply out.
+
+### 4.7 Immediate next actions
+
+1. **Morning:** read `monitor.py` output; if phase 1 is clean, plot and compare against
+   the rebuttal's GCBC curve.
+2. Answer **Q1** (critic loss form) — the `q1_loss_pilot` grid is 4 runs and already
+   configured; it is the cheapest way to settle whether our depth test is even testing
+   the 1000-layer recipe.
+3. Answer **Q2** (representation dim: 16 vs 64 vs 512).
+4. Build `build_subsets.py` + `dataset_manifest.py` + coverage stats — the remaining
+   phase-0 deliverables, needed before phase 3, not before phase 1.
+5. Implement the phase-2 probes against the `params_best.pkl` checkpoints phase 1 is
+   producing now.
+
+---
+
+## 5. Experiment log
+
+Append one entry per run batch. Template:
+
+```
+### E<n> — <short name>  ·  <date>
+**Question:**
+**Config:** agent / depth / width / dataset + subset id / seeds / loss form / repr dim / batch / lr
+**Commit:**
+**Compute:** GPUs, wall-clock, gradient steps, samples seen, parameter count, peak memory
+**Result:** best success + step, per-task breakdown
+**Probes:**
+**Read:** what this says about H-data / H-actor / H-horizon
+**Next:**
+```
+
+*(No experiments run yet. Phase 0 in progress.)*
+
+---
+
+## 6. Changelog
+
+- **2026-11-05** — D5 settled as shard-aligned; D6 (OGBench impls + patches), D9 (plain
+  Adam) and D10 (Slurm shape) settled. Q5 and Q6 resolved. Downloaded all planned data
+  (4.36 GB). Built and GPU-verified the full training stack — residual tower with measured
+  parameter counts, agent injection, dataset resolution, plateau-stopped training loop,
+  pack-based Slurm scheduling, monitor and five figures (see `impl_log.md` I1–I13).
+  Launched phase 1 (24 runs, 4 chained packs) behind a 9-check GPU smoke test. Discovered
+  and encoded two cluster blockers: the 8-GPU node is down and the maintenance window
+  forbids long jobs. Corrected the brief's claim that the 1000-layer paper uses
+  stable-CRL's weight init — it uses plain `lecun_uniform` throughout; only LayerNorm is
+  shared, and even then with opposite ordering relative to the activation.
+- **2026-11-04** — Log created. Verified cluster limits, dataset structure and sizes, `qpos`/`qvel`
+  semantics, OGBench/stable-CRL/scaling-crl architecture and loss differences. Established that OGBench
+  does not implement stable-CRL and that no stable-CRL results exist on OGBench. Downloaded
+  `antmaze-medium-stitch-v0` and `cube-double-play-100m-v0` shard 000. Settled D1–D3; opened Q1, D5, D8.
