@@ -13,11 +13,17 @@ terminal output.
 > project."* **CRL scaled: 34.1 → 49.3 → 71.4 across depths 4 → 8 → 16**, all three
 > depths now finished, 3 seeds each.
 >
-> The 1000-layer paper's own §4.6 reports the opposite for offline CRL on OGBench:
-> *"We found little evidence that increasing the network depth of CRL improves
-> performance in this offline setting."* **But we are not running their critic loss** —
-> ours is OGBench's binary-NCE with dot-product logits, theirs is InfoNCE with negative
-> L2 and a logsumexp penalty. Read §2 before §6.
+> Rescored at OGBench's published 50 episodes/task, the trend strengthens:
+> **34.3 → 54.7 → 78.4**.
+>
+> **This is not yet a result about depth scaling offline.** Two reasons, both in §2.
+> We are not running the paper's critic loss (ours is binary NCE on dot products,
+> theirs is InfoNCE on negative L2 with a logsumexp penalty). And
+> antmaze-medium-stitch is the **one** offline environment where the paper already
+> reports depth helping — its Figure 14 shows offline GCBC scaling on exactly this
+> dataset. Finding a positive here is finding one where a positive was already known;
+> the open question is whether it survives anywhere else. `humanoid_ensemble1` is that
+> test. Read §2 before §6.
 
 ---
 
@@ -336,9 +342,18 @@ stalls, no resubmissions since the smoke gate.
 
 **What is not yet measured.** Every success number below comes from the in-training
 evaluator at **15 episodes/task (75 episodes per point)**. OGBench's published commands
-use `--eval_episodes=50` (250 per point). Job `2993575` re-scores `params_best.pkl` at
-50 and is queued. Until it runs, treat these as noisier than the table they are compared
-against, and the comparison itself as provisional.
+use `--eval_episodes=50` (250 per point).
+
+**Job `2993575` has now rescored every finished run's `params_best.pkl` at 50** —
+`reeval@50` below, written to `analysis/<grid>/reeval_50ep.json`. That is the number
+comparable to OGBench's table. Three conventions appear throughout, and they measure
+different parameters (`algorithm.md` §2.2):
+
+| convention | parameters | use |
+|---|---|---|
+| `reeval@50` | `params_best.pkl`, one checkpoint, 250 episodes/point | **the headline** |
+| `last3_eval_mean` | the last 3 eval points, 3 different networks, 75 episodes each | the paper's convention; noisy |
+| `best_success` | live params at the best eval | optimistic, a max over ~20 noisy points |
 
 ---
 
@@ -347,15 +362,20 @@ against, and the comparison itself as provisional.
 **Metric:** mean of the final 3 evaluations, the convention the OGBench paper reports.
 **Units:** percentage of episodes succeeded, 0–100. **Spread:** ±1 SD across 3 seeds.
 
-| agent | ours (last-3 @ 1M steps, 15 eps/task) | published (50 eps/task) | per-seed |
+| agent | **reeval@50** | last-3 @ 1M (15 eps) | published (50 eps) |
 |---|---|---|---|
-| CRL | **45.5 ± 8.1** | 53 ± 6 | 56.9, 40.9, 38.7 |
-| GCBC | **37.2 ± 11.4** | 45 ± 11 | 23.6, 51.6, 36.4 |
+| CRL | **47.5 ± 7.0** | 45.5 ± 8.1 | 53 ± 6 |
+| GCBC | **52.0 ± 5.8** | 37.2 ± 11.4 | 45 ± 11 |
 
-Both land ~8 points low with overlapping intervals. With 3 seeds and SD ≈ 10 points the
-standard error is ≈ 5–6, so **this neither confirms nor refutes the reproduction**. It
-is consistent with it. 3 seeds at 15 episodes cannot resolve an 8-point gap; the pending
-50-episode re-eval is what will move this.
+**The reproduction is clean.** At the published episode count both agents land inside
+the published bands — CRL 47.5 against 53 ± 6, GCBC 52.0 against 45 ± 11. The earlier
+8-point shortfall was the 15-episode evaluator, not the harness: GCBC in particular
+moves 37.2 → 52.0, because `last3_eval_mean` averages three noisy 75-episode estimates
+from three different networks while `reeval@50` scores one checkpoint over 250 episodes.
+
+The lesson generalizes past this table: **a 15-episode evaluator cannot resolve
+differences of under ~10 points**, so any claim at that resolution has to be rescored
+before it is believed.
 
 Per-task, the anchor scores **task 4 at 0.01 (CRL) and 0.00 (GCBC)** at every seed,
 capping the aggregate at 0.80 — so OGBench's published ~0.53 for CRL is *consistent with
@@ -379,6 +399,17 @@ every run. The pin is necessary: the plateau rule stops runs anywhere between 0.
 1.9M steps, so an unpinned last-3 measures each run at a different point on its own
 curve. **Units:** percent of episodes, ±1 SD over 3 seeds.
 
+**reeval@50** (the headline — best checkpoint, 250 episodes/point):
+
+| depth | CRL | GCBC |
+|---|---|---|
+| 4 | 34.3 ± 9.9 | 57.3 ± 3.8 |
+| 8 | 54.7 ± 2.6 | 66.3 ± 0.4 |
+| 16 | **78.4 ± 8.5** | 65.5 ± 2.5 |
+| 32 | still training | 64.4 ± 2.1 |
+
+**last-3 @ a fixed 1M steps** (the paper's convention, 75 episodes/point):
+
 | depth | CRL | GCBC |
 |---|---|---|
 | 4 | 34.1 ± 9.8 | 53.5 ± 6.8 |
@@ -386,19 +417,24 @@ curve. **Units:** percent of episodes, ±1 SD over 3 seeds.
 | 16 | **71.4 ± 1.9** | 62.5 ± 2.4 |
 | 32 | not yet at 1M \* | 61.2 ± 5.5 |
 
+The two agree on shape and the headline is uniformly higher, as expected from a best
+checkpoint scored over more episodes. Everything below quotes the last-3 numbers where
+a common step matters and the reeval numbers where absolute level matters.
+
 \* CRL d32 is at ~575k gradient steps. It is **excluded** rather than reported at the
 wrong step — see §11 defect 5, which is a bug that briefly did report it at the wrong
 step.
 
-**CRL: 34 → 49 → 71 across a 4× depth change**, far outside the seed spread, and the
-spread *tightens* as depth grows (SD 9.8 → 3.8 → 1.9). At depth 16 CRL reaches 71%,
-against OGBench's published 53% for the same agent on the same data.
+**CRL: 34.3 → 54.7 → 78.4 across a 4× depth change** (reeval@50), far outside the seed
+spread. At depth 16 CRL reaches 78%, against OGBench's published 53% for the same agent
+on the same data. On the common-step metric the spread also *tightens* with depth
+(SD 9.8 → 3.8 → 1.9), which is not what noise does.
 
 CRL d32's partial evidence points higher still: its per-task scores at ~575k steps
 (§7) already exceed d16's final ones on four of five tasks. Treat as a lower bound.
 
-**GCBC saturates at depth 8**: 53.5 → 65.2 (real, SDs 6.8 and 1.6, non-overlapping),
-then flat at 62.5 and 61.2. (A reference value of 0.63 at depth 32 is recorded in our
+**GCBC saturates at depth 8**: reeval@50 57.3 → 66.3 → 65.5 → 64.4, i.e. a real gain
+from 4 to 8 (SDs 3.8 and 0.4, non-overlapping) and flat thereafter. (A reference value of 0.63 at depth 32 is recorded in our
 figures as coming from the paper's rebuttal; it is **unverified** — see §2.7.)
 
 ### 6.1 Is this the critic, or just a bigger network?
@@ -446,18 +482,25 @@ sit between 0.9991 and 0.9993. `fig3` labels it as such. See `algorithm.md` §3.
 
 ### 6.2 Caveats on the scaling claim
 
-1. **It contradicts the paper's own offline finding** (§2.5), which is reason to look
-   for our error before celebrating. Leading candidate is §2.6: we ran OGBench's
+1. **This is the one offline environment where a positive was already reported.** The
+   paper's §4.6 is negative about offline CRL in general, but its Figure 14 shows
+   offline **GCBC** scaling with depth on `antmaze-medium-stitch` specifically. We
+   found CRL scaling on that same dataset. That is adjacent to a known positive, not
+   against it — so the right description is *"the known antmaze-stitch depth effect is
+   much larger for CRL than for GCBC"*, not *"offline depth scaling works"*. One
+   environment supports neither claim on its own.
+2. **It disagrees with §4.6's general negative** (§2.5), which is reason to look for
+   our error before celebrating. Leading candidate is §2.6: we ran OGBench's
    binary-NCE/dot critic, not the paper's InfoNCE/L2/logsumexp one.
-2. **Actor and critic depth are not separated** (§6.1). The paper's §4.4 ablation is the
+3. **Actor and critic depth are not separated** (§6.1). The paper's §4.4 ablation is the
    missing experiment.
-3. **Depth and parameter count are confounded.** Width is fixed at 256, so deeper is
+4. **Depth and parameter count are confounded.** Width is fixed at 256, so deeper is
    also bigger: CRL d4 = 1.45M params, d8 = 2.77M. A width-matched control is **not** in
    the grid. The `plain_mlp` preset isolates residual-vs-plain but not depth-vs-size.
-4. **d32 is unfinished** (~575k of 2M steps) and has no 1M-step value. Depths 4, 8 and
+5. **d32 is unfinished** (~575k of 2M steps) and has no 1M-step value. Depths 4, 8 and
    16 are complete at 3 seeds each.
-5. **15 episodes/task.** `2993575` pending.
-6. **One dataset, one environment.** Everything here is `antmaze-medium-stitch-v0`.
+6. **Resolved at 15 episodes during training**; `reeval@50` has now rescored every finished run, and the shape held.
+7. **One dataset, one environment.** Everything here is `antmaze-medium-stitch-v0`. `humanoid_ensemble1` (8 runs, queued) is the generalization test.
 
 ---
 
@@ -539,19 +582,41 @@ All in [`figures/<grid>/`](figures/), PNG + CSV.
 
 ## 10. What this changes
 
-- **The pre-registered stop condition fired.** `phase1_repro`'s spec said to stop and
-  report if CRL scales. It scaled — and it scaled where the paper reports it does not.
-- **Q1 is no longer a convention question, it is the experiment.** We got offline depth
-  scaling with OGBench's binary-NCE/dot critic; the paper got none with
-  InfoNCE/L2/logsumexp. `q1_loss_pilot` tells us whether the loss form is the reason.
-  Either answer is a result.
+**Running now.** `humanoid_ensemble1` — 8 runs, ~71 GPU-h, queued as `2993926`/`2993927`.
+Same binary-NCE critic, single critic ensemble, depths 4/8/16/32, 2 seeds, on
+`humanoidmaze-medium-navigate-v0`. Same 8×8 maze and same five (start, goal) pairs as
+antmaze-medium, different body (ob 69, act 21, 2000-step episodes) and `-navigate`
+rather than `-stitch`, so far less stitching is required. **This is the test of whether
+§6 is about depth or about one dataset.**
+
+**Then: mechanistic interpretability on the trained critics.** The §6 result says a
+deeper critic is better, and §6.1 says we cannot tell from behaviour alone whether that
+is the critic or the actor. Probing the critic directly is the way past that, and we now
+have a depth ladder of checkpoints to probe — the same architecture at 4/8/16/32 trained
+on identical data. Starting points, in order:
+
+1. **What does `ψ(g)` encode?** Linear-probe the goal representation for maze cell,
+   `(x, y)`, and BFS distance to each of the five task goals. If depth buys a better
+   metric space, probe accuracy should rise with depth, and it should rise *most* on
+   whatever predicts task 4.
+2. **Is `φ(s,a) · ψ(g)` ordered like true distance?** Correlate the critic's logit
+   against BFS cell distance, binned by distance and with "goal == trajectory final
+   state" held out separately (43.6% of value goals — research log §1.8).
+3. **Where does the representation stop changing?** Per-block representational
+   similarity across the tower — if the useful depth is concentrated in the first few
+   blocks, the scaling story is about optimization, not capacity.
+
+**Still open, unchanged.**
+
+- **Q1 is the experiment, not a convention.** `q1_loss_pilot` (4 runs, ~26 GPU-h) tells
+  us whether the loss form explains the disagreement with §4.6.
 - **Implement `actor_thread`.** The paper's §4.4 separates actor depth from critic depth
   and finds the answer environment-dependent. Our grid cannot separate them.
 - **Run `arch=residual_cold`.** The paper's other offline ablation, also unrun.
-- **Q2 (`repr_dim`) now blocks interpretation**, per §7 point 2.
-- **Extend the CRL sweep past 16.** It has not saturated; d32 is 14% through.
-- **Phase 2 probes should bin per task, not only per distance** — and should use the
-  first-move angle from §1.4, which predicted GCBC's per-task results exactly.
+- **Q2 (`repr_dim`) blocks interpretation**, per §7 point 2 — and it will matter for the
+  probes above, since `repr_dim` is literally the width of the thing being probed.
+- **Probes bin per task, not only per distance**, and should use the first-move angle
+  from §1.4, which predicted GCBC's per-task results exactly.
 
 ---
 

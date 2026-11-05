@@ -800,6 +800,49 @@ bug had briefly reported CRL d32 as 0.781 from its 300–500k evaluations.
 steps/s, 7.5 h/run.
 **Next:** CRL d32 finishes in ~5 h for its 1M value. `reeval@50` (job 2993575) running.
 
+### E3 — reeval@50 for both phase-1 grids  ·  2026-11-05 (job 2993575, COMPLETED 1h27m)
+**Scores (reeval@50, best checkpoint, 250 episodes/point — the headline convention):**
+
+| | reeval@50 | last-3 | published |
+|---|---|---|---|
+| anchor CRL d4 (stock MLP) | **47.5 ± 7.0** | 45.5 ± 8.1 | 53 ± 6 |
+| anchor GCBC d4 (stock MLP) | **52.0 ± 5.8** | 37.2 ± 11.4 | 45 ± 11 |
+| repro CRL d4 / d8 / d16 | **34.3 / 54.7 / 78.4** | 33.0 / 49.9 / 69.0 | — |
+| repro GCBC d4 / d8 / d16 / d32 | **57.3 / 66.3 / 65.5 / 64.4** | 46.5 / 61.9 / 62.4 / 62.1 | — |
+
+**Read:** the anchor reproduction is **clean** at the published episode count — both
+agents inside the published bands. The earlier ~8-point shortfall was the 15-episode
+evaluator, not the harness (GCBC moves 37.2 → 52.0). General lesson: a 15-episode
+evaluator cannot resolve differences under ~10 points.
+
+The CRL depth trend strengthens at 50 episodes: 34.3 → 54.7 → 78.4. GCBC saturates at
+depth 8.
+
+**SCOPING CORRECTION (user, 2026-11-05).** These are **not** publishable results and
+the "we contradict §4.6" framing was too strong. The paper's Figure 14 already reports
+offline **GCBC** scaling with depth on `antmaze-medium-stitch` specifically. We found
+CRL scaling on that same dataset — adjacent to a known positive, not against it. The
+defensible claim is *"the known antmaze-stitch depth effect is much larger for CRL than
+for GCBC"*, and even that rests on one environment. §4.6's negative is about offline CRL
+in general; one favourable dataset does not overturn it.
+**Next:** other environments, starting with `humanoid_ensemble1`.
+
+### E4 — humanoid_ensemble1  ·  submitted 2026-11-05, jobs 2993926 / 2993927
+**Question:** does §E2's depth effect survive a change of environment, or is it about
+`antmaze-medium-stitch`?
+**Config:** `humanoidmaze-medium-navigate-v0` (ob 69, act 21, **2000**-step episodes),
+CRL only, depths 4/8/16/32, **2 seeds**, `critic_ensemble=1` (newly implemented),
+binary NCE + dot, repr_dim 64, residual width 256, published flags incl.
+**discount 0.995**. 8 runs, ~71 GPU-h estimated, ~12 h wall.
+**Why this env:** same 8×8 maze and the same five (start, goal) cell pairs as
+antmaze-medium, so research log §1.11's first-move-angle analysis transfers and task 4
+is still the forced 180° detour. Two things change at once, deliberately: the body
+(humanoid), and `-navigate` instead of `-stitch` — 1001-step trajectories, so far less
+stitching is needed. A null here would be informative either way.
+**Next after this:** mechanistic interpretability on the depth ladder of critics —
+probe `ψ(g)` for maze cell / BFS distance, check whether `φ·ψ` is ordered like true
+distance, and look at per-block representational change. See `results_phase1.md` §10.
+
 **Full write-up with figures and tables: [`results_phase1.md`](results_phase1.md).**
 
 ---
