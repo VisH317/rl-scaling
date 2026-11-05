@@ -1,7 +1,7 @@
 # Phase 1 results — offline GCRL depth scaling on `antmaze-medium-stitch-v0`
 
-Compiled 2026-11-05. Covers grids `phase1_anchor` (finished) and `phase1_repro`
-(16 of 24 runs finished, 8 still training).
+Compiled 2026-11-05, updated 13:45. Covers grids `phase1_anchor` (finished) and
+`phase1_repro` (**21 of 24 runs finished**; only CRL depth 32 is still training).
 
 Figures are in [`figures/`](figures/), copied from
 `/scratch/gpfs/vt7993/rl-scaling/experiments/analysis/`. Every PNG has a CSV beside it,
@@ -10,7 +10,8 @@ terminal output.
 
 > **Headline.** `phase1_repro`'s own grid spec in `config.py` says: *"Expect CRL flat
 > with depth, GCBC rising. If CRL scales here, stop and report — that alone changes the
-> project."* **CRL scaled: 34.1 → 49.3 → 74.2 across depths 4 → 8 → 16.**
+> project."* **CRL scaled: 34.1 → 49.3 → 71.4 across depths 4 → 8 → 16**, all three
+> depths now finished, 3 seeds each.
 >
 > The 1000-layer paper's own §4.6 reports the opposite for offline CRL on OGBench:
 > *"We found little evidence that increasing the network depth of CRL improves
@@ -319,7 +320,7 @@ and `repr_dim` — the two are *not* a controlled comparison. See §5.
 | grid | runs | finished | in flight |
 |---|---|---|---|
 | `phase1_anchor` | 6 | 6 | 0 |
-| `phase1_repro` | 24 | 16 | 8 (CRL d16, CRL d32, GCBC d32) |
+| `phase1_repro` | 24 | **21** | 3 (CRL d32, at ~29%) |
 
 ```
 2993272  crl-pack    COMPLETED  02:01:29   anchor
@@ -330,7 +331,7 @@ and `repr_dim` — the two are *not* a controlled comparison. See §5.
 2993575  crl-reeval  PENDING               blocked by the 2-job GPU QOS limit
 ```
 
-**41.2 GPU-hours** of training wall clock across the 22 finished runs. No failures, no
+**72.0 GPU-hours** of training wall clock across the 27 finished runs. No failures, no
 stalls, no resubmissions since the smoke gate.
 
 **What is not yet measured.** Every success number below comes from the in-training
@@ -382,16 +383,19 @@ curve. **Units:** percent of episodes, ±1 SD over 3 seeds.
 |---|---|---|
 | 4 | 34.1 ± 9.8 | 53.5 ± 6.8 |
 | 8 | 49.3 ± 3.8 | 65.2 ± 1.6 |
-| 16 | **74.2 ± 5.1** \* | 62.5 ± 2.4 |
-| 32 | not yet at 1M \* | 61.2 ± 5.5 \* |
+| 16 | **71.4 ± 1.9** | 62.5 ± 2.4 |
+| 32 | not yet at 1M \* | 61.2 ± 5.5 |
 
-\* contains runs still training. A value shown is final *at 1M steps* regardless of what
-the run does later; CRL d32 is at ~280k steps and is excluded rather than reported at
-the wrong step.
+\* CRL d32 is at ~575k gradient steps. It is **excluded** rather than reported at the
+wrong step — see §11 defect 5, which is a bug that briefly did report it at the wrong
+step.
 
-**CRL: 34 → 49 → 74 across a 4× depth change**, far outside the seed spread, still
-rising at 16. At depth 16 CRL reaches 74%, against OGBench's published 53% for the same
-agent on the same data.
+**CRL: 34 → 49 → 71 across a 4× depth change**, far outside the seed spread, and the
+spread *tightens* as depth grows (SD 9.8 → 3.8 → 1.9). At depth 16 CRL reaches 71%,
+against OGBench's published 53% for the same agent on the same data.
+
+CRL d32's partial evidence points higher still: its per-task scores at ~575k steps
+(§7) already exceed d16's final ones on four of five tasks. Treat as a lower bound.
 
 **GCBC saturates at depth 8**: 53.5 → 65.2 (real, SDs 6.8 and 1.6, non-overlapping),
 then flat at 62.5 and 61.2. (A reference value of 0.63 at depth 32 is recorded in our
@@ -418,7 +422,7 @@ excluded (not yet there):
 |---|---|---|---|---|
 | 4 | 0.369 | 0.00387 | 0.00530 | 0.341 |
 | 8 | 0.467 | 0.00337 | 0.00549 | 0.493 |
-| 16 | 0.583 | 0.00269 | 0.00632 | 0.742 |
+| 16 | 0.607 | 0.00258 | 0.00642 | 0.714 |
 
 - **InfoNCE top-1 accuracy** — fraction in `[0, 1]`; chance is 1/1024 ≈ 0.001 at batch
   1024. The critic identifies the true future state among 1023 distractors 58% of the
@@ -438,7 +442,7 @@ obvious-looking metric.
 
 (`binary_accuracy` is logged but near-useless: with batch 1024 the pair matrix is
 ~1/1024 positives, so predicting "negative" everywhere already scores 0.999. All depths
-sit between 0.9991 and 0.9993. `fig3` labels it as such.)
+sit between 0.9991 and 0.9993. `fig3` labels it as such. See `algorithm.md` §3.2.)
 
 ### 6.2 Caveats on the scaling claim
 
@@ -450,8 +454,8 @@ sit between 0.9991 and 0.9993. `fig3` labels it as such.)
 3. **Depth and parameter count are confounded.** Width is fixed at 256, so deeper is
    also bigger: CRL d4 = 1.45M params, d8 = 2.77M. A width-matched control is **not** in
    the grid. The `plain_mlp` preset isolates residual-vs-plain but not depth-vs-size.
-4. **d16 and d32 are unfinished.** d16's 1M-step value is sound; its final value is not
-   in yet, and d32 has no 1M-step value at all.
+4. **d32 is unfinished** (~575k of 2M steps) and has no 1M-step value. Depths 4, 8 and
+   16 are complete at 3 seeds each.
 5. **15 episodes/task.** `2993575` pending.
 6. **One dataset, one environment.** Everything here is `antmaze-medium-stitch-v0`.
 
@@ -466,18 +470,24 @@ fraction of episodes in `[0, 1]`.
 |---|---|---|---|---|---|
 | CRL d4 (residual) | 0.10 | 0.43 | 0.83 | 0.13 | 0.16 |
 | CRL d8 | 0.04 | 0.16 | 0.87 | 0.49 | 0.94 |
-| CRL d16 \* | 0.39 | 0.64 | 0.95 | **0.80** | 0.93 |
+| CRL d16 | 0.15 | 0.73 | 0.93 | **0.76** | 0.89 |
+| CRL d32 \* | 0.53 | 0.55 | 0.93 | **0.93** | 0.96 |
 | GCBC d4 | 0.94 | 0.60 | 0.24 | **0.00** | 0.54 |
 | GCBC d8 | 0.95 | 0.70 | 0.52 | **0.00** | 0.93 |
 | GCBC d16 | 0.94 | 0.82 | 0.39 | **0.00** | 0.96 |
-| GCBC d32 \* | 0.90 | 0.82 | 0.39 | 0.10 | 0.89 |
+| GCBC d32 | 0.91 | 0.74 | 0.41 | 0.12 | 0.92 |
 | CRL d4 (stock MLP, anchor) | 0.74 | 0.69 | 0.10 | **0.01** | 0.74 |
 | GCBC d4 (stock MLP, anchor) | 0.78 | 0.33 | 0.19 | **0.00** | 0.56 |
 
+\* CRL d32 is still training (~575k steps); its row is a lower bound, and the `status`
+column of `fig6_per_task.csv` marks it.
+
 1. **Task 4 — the forced 180° detour — is solved only by a deep contrastive critic.**
-   0.00 for GCBC at every depth and seed, ~0.00 for both agents under the stock
-   architecture, and 0.13 → 0.49 → 0.80 for CRL as depth goes 4 → 8 → 16. A phase
-   transition on one task, not a uniform lift, and it is most of CRL's aggregate gain.
+   0.00 for GCBC at depths 4/8/16 and every seed, ~0.00 for both agents under the stock
+   architecture, and 0.13 → 0.49 → 0.76 → 0.93 for CRL as depth goes 4 → 8 → 16 → 32. A
+   phase transition on one task, not a uniform lift, and it is most of CRL's aggregate
+   gain. GCBC reaches 0.12 only at depth 32 — a hint that enough depth eventually helps
+   the policy too, but two orders of magnitude behind CRL.
 2. **Architecture reallocates which tasks are solved, at nearly equal aggregate.** Stock
    CRL d4 scores 0.74 on task 1 and 0.10 on task 3; residual CRL d4 does the reverse —
    0.10 and 0.83. Aggregates 45.5 vs 34.1. The aggregate difference is small; the
@@ -497,11 +507,12 @@ actor); `steps/s` = gradient steps per second on one GPU, mean over seeds; `wall
 | agent | depth | params | steps/s | wall-clock (h) |
 |---|---|---|---|---|
 | CRL | 4 | 1,446,408 | 151 | 2.67 |
-| CRL | 8 | 2,772,488 | 86 | 3.56 |
+| CRL | 8 | 2,772,488 | 85 | 3.57 |
+| CRL | 16 | 5,424,648 | 49 | 7.54 |
 | GCBC | 4 | 282,888 | 400 | 0.97 |
 | GCBC | 8 | 548,104 | 263 | 1.30 |
-| GCBC | 16 | 1,078,536 | 186 | 1.58 |
-| GCBC | 32 | 2,139,400 | 98 | 3.13 |
+| GCBC | 16 | 1,078,536 | 186 | 1.59 |
+| GCBC | 32 | 2,139,400 | 107 | 3.76 |
 | CRL | 4 (stock, anchor) | 3,793,416 | 139 | 2.00 |
 | GCBC | 4 (stock, anchor) | 559,624 | 476 | 0.59 |
 
@@ -546,7 +557,7 @@ All in [`figures/<grid>/`](figures/), PNG + CSV.
 
 ## 11. Defects found while compiling this
 
-All four were found by checking output rather than trusting it; all four are fixed in
+All five were found by checking output rather than trusting it; all five are fixed in
 `plot_results.py`.
 
 1. `fig3` looked for `train/categorical_accuracy`; the column is
@@ -560,6 +571,16 @@ All four were found by checking output rather than trusting it; all four are fix
    excluded from the solid series and its mean.
 4. `fig4` drew ticks from the full `GRID_DEPTHS` constant (empty slot at 64) and
    repeated one legend across three panels.
+5. **`last3_mean(up_to_step=1M)` did not check that the run had reached 1M.** It
+   filtered evaluations to `step ≤ 1M` and took the last three — so a CRL depth-32 run
+   at 575k steps reported its 300k/400k/500k evaluations under the label "last-3 mean at
+   1M steps", as `0.781 ± 0.060`. It is now `None` unless the run actually reached the
+   pin, and depth 32 is omitted from §6 with the reason in the caption.
+
+   This is the **same bug as defect 2**, which I had already fixed once in `fig3` — and
+   then reintroduced in the helper written to prevent it. The earlier "CRL d16 =
+   74.2 ± 5.1" in this document was affected too: two of its three seeds were below 1M
+   at the time. The correct finished value is **71.4 ± 1.9**.
 
 Defect 1 is the one that mattered: a figure that silently produces nothing is worse than
 one that crashes, because the absence looks like a decision.

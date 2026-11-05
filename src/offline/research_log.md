@@ -783,6 +783,23 @@ optimistic, since it is a max over ~20 noisy points).
 **Read:** the depth benefit is specific to the contrastive critic, not to "deeper nets on this data" — a deeper BC policy plateaus, a deeper value function does not. Held-out contrastive loss is **anti-correlated** with success here, so it must not be used for model selection or early stopping. Supports H-horizon: the task depth unlocks is the one requiring stitching.
 **Next:** CRL d16/d32 and GCBC d32 still training. Extend the CRL sweep past 16. Depth and parameter count are confounded (width fixed) — a width-matched control is not in the grid. Q2 (`repr_dim`) now blocks interpretation of §3's architecture inversion, not just configuration.
 
+### E2a — phase1_repro update: depths 4/8/16 complete  ·  2026-11-05 13:45
+**Scores:** last3 @ 1M = CRL **34.1 / 49.3 / 71.4** (d4/8/16, 3 seeds each, all finished),
+GCBC 53.5 / 65.2 / 62.5 / 61.2 (d4/8/16/32, all finished). CRL d32 at ~575k of 2M steps.
+**Result:** the CRL trend survives completion and the seed spread *tightens* with depth
+(SD 9.8 → 3.8 → 1.9). Critic diagnostics at a common 1M steps: InfoNCE top-1 0.369 →
+0.467 → 0.607; train contrastive loss 0.00387 → 0.00258; **val** contrastive loss
+0.00530 → 0.00642 — the train/validation decoupling holds. Per-task, task 4 goes
+0.13 → 0.49 → 0.76 for CRL, and 0.93 at depth 32 (partial). GCBC reaches 0.12 on task 4
+only at depth 32, its first non-zero.
+**Correction:** the earlier figure of CRL d16 = 74.2 ± 5.1 was computed when two of its
+three seeds were below 1M steps; `last3_mean` filtered evaluations to `step ≤ 1M` but
+never checked the run had *reached* 1M. Fixed. Correct value **71.4 ± 1.9**. The same
+bug had briefly reported CRL d32 as 0.781 from its 300–500k evaluations.
+**Compute:** 72.0 GPU-hours over 27 finished runs. CRL d16 is 5,424,648 params, 49
+steps/s, 7.5 h/run.
+**Next:** CRL d32 finishes in ~5 h for its 1M value. `reeval@50` (job 2993575) running.
+
 **Full write-up with figures and tables: [`results_phase1.md`](results_phase1.md).**
 
 ---

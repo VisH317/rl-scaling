@@ -186,8 +186,15 @@ def last3_mean(rec: dict, up_to_step: int | None = None) -> float | None:
     rule stops runs at different steps, so an unpinned last-3 is measured at a different
     point for every run and a depth comparison built on it is not like-for-like.
     """
-    vals = [v for st, v in eval_series(rec)
-            if up_to_step is None or st <= up_to_step]
+    series = eval_series(rec)
+    if not series:
+        return None
+    if up_to_step is not None and max(st for st, _ in series) < up_to_step:
+        # The run has not REACHED the pin yet. Returning its last three evaluations
+        # here would report, say, a 575k-step value under the label "at 1M" -- the
+        # exact mislabel this function exists to prevent.
+        return None
+    vals = [v for st, v in series if up_to_step is None or st <= up_to_step]
     if len(vals) < 3:
         return None
     return float(np.mean(vals[-3:]))
@@ -751,10 +758,12 @@ def fig_per_task(runs, out_dir, grid, n_tasks=5):
         cap += "  * = contains runs still training."
     fig.text(0.0, -0.04 - 0.01 * len(mat), cap, color=MUTED, fontsize=8, ha="left")
 
-    rows = [[labels[i].replace("  *", "")] + [round(float(v), 4) for v in arr[i]]
+    rows = [[labels[i].replace("  *", ""),
+             "in-flight" if note[i] else "finished"]
+            + [round(float(v), 4) for v in arr[i]]
             for i in range(len(labels))]
     save(fig, out_dir, "fig6_per_task",
-         rows, ["config"] + [f"task{i}" for i in range(1, n_tasks + 1)])
+         rows, ["config", "status"] + [f"task{i}" for i in range(1, n_tasks + 1)])
 
 
 def main() -> int:

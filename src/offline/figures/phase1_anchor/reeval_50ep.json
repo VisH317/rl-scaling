@@ -1,0 +1,158 @@
+[
+  {
+    "run_id": "phase1_anchor__crl__d4__n1000000__s0__e2b4cdd4",
+    "grid": "phase1_anchor",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "ogbench_mlp",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.572,
+    "reeval_per_task": {
+      "task1": 0.96,
+      "task2": 0.82,
+      "task3": 0.18,
+      "task4": 0.0,
+      "task5": 0.9
+    },
+    "train_best_success": 0.6,
+    "last3_eval_mean": 0.5689,
+    "last3_evals": [
+      0.56,
+      0.5467,
+      0.6
+    ],
+    "reeval_secs": 160.1
+  },
+  {
+    "run_id": "phase1_anchor__crl__d4__n1000000__s1__717fe2b1",
+    "grid": "phase1_anchor",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "ogbench_mlp",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.44,
+    "reeval_per_task": {
+      "task1": 0.82,
+      "task2": 0.68,
+      "task3": 0.02,
+      "task4": 0.08,
+      "task5": 0.6
+    },
+    "train_best_success": 0.5066666666666666,
+    "last3_eval_mean": 0.4089,
+    "last3_evals": [
+      0.4533,
+      0.3333,
+      0.44
+    ],
+    "reeval_secs": 184.1
+  },
+  {
+    "run_id": "phase1_anchor__crl__d4__n1000000__s2__965db516",
+    "grid": "phase1_anchor",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "ogbench_mlp",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.412,
+    "reeval_per_task": {
+      "task1": 0.38,
+      "task2": 0.8,
+      "task3": 0.26,
+      "task4": 0.0,
+      "task5": 0.62
+    },
+    "train_best_success": 0.48,
+    "last3_eval_mean": 0.3867,
+    "last3_evals": [
+      0.4267,
+      0.28,
+      0.4533
+    ],
+    "reeval_secs": 196.3
+  },
+  {
+    "run_id": "phase1_anchor__gcbc__d4__n1000000__s0__58179f22",
+    "grid": "phase1_anchor",
+    "agent": "gcbc",
+    "depth": 4,
+    "tower": "ogbench_mlp",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.532,
+    "reeval_per_task": {
+      "task1": 0.94,
+      "task2": 0.86,
+      "task3": 0.02,
+      "task4": 0.0,
+      "task5": 0.84
+    },
+    "train_best_success": 0.5866666666666667,
+    "last3_eval_mean": 0.2356,
+    "last3_evals": [
+      0.2267,
+      0.2,
+      0.28
+    ],
+    "reeval_secs": 152.3
+  },
+  {
+    "run_id": "phase1_anchor__gcbc__d4__n1000000__s1__a1d4e5f2",
+    "grid": "phase1_anchor",
+    "agent": "gcbc",
+    "depth": 4,
+    "tower": "ogbench_mlp",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.584,
+    "reeval_per_task": {
+      "task1": 0.78,
+      "task2": 0.6,
+      "task3": 0.64,
+      "task4": 0.0,
+      "task5": 0.9
+    },
+    "train_best_success": 0.5866666666666667,
+    "last3_eval_mean": 0.5156,
+    "last3_evals": [
+      0.52,
+      0.4933,
+      0.5333
+    ],
+    "reeval_secs": 153.8
+  },
+  {
+    "run_id": "phase1_anchor__gcbc__d4__n1000000__s2__483e2477",
+    "grid": "phase1_anchor",
+    "agent": "gcbc",
+    "depth": 4,
+    "tower": "ogbench_mlp",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.444,
+    "reeval_per_task": {
+      "task1": 0.96,
+      "task2": 0.46,
+      "task3": 0.02,
+      "task4": 0.0,
+      "task5": 0.78
+    },
+    "train_best_success": 0.4533333333333333,
+    "last3_eval_mean": 0.3644,
+    "last3_evals": [
+      0.2933,
+      0.44,
+      0.36
+    ],
+    "reeval_secs": 174.7
+  }
+]

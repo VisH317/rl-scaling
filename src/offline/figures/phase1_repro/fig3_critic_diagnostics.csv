@@ -1,13 +1,13 @@
 metric,depth,n_seeds,mean_at_1000000,std
 train/critic/categorical_accuracy,4,3,0.36914,0.01738
 train/critic/categorical_accuracy,8,3,0.4668,0.0084
-train/critic/categorical_accuracy,16,3,0.60221,0.00814
+train/critic/categorical_accuracy,16,3,0.6071,0.02032
 train/critic/binary_accuracy,4,3,0.99911,0.0
 train/critic/binary_accuracy,8,3,0.9992,1e-05
-train/critic/binary_accuracy,16,3,0.99931,0.0
+train/critic/binary_accuracy,16,3,0.99931,1e-05
 train/critic/contrastive_loss,4,3,0.00387,8e-05
 train/critic/contrastive_loss,8,3,0.00337,3e-05
-train/critic/contrastive_loss,16,3,0.00261,1e-05
+train/critic/contrastive_loss,16,3,0.00258,6e-05
 val/critic/contrastive_loss,4,3,0.0053,5e-05
 val/critic/contrastive_loss,8,3,0.00549,4e-05
-val/critic/contrastive_loss,16,3,0.00626,9e-05
+val/critic/contrastive_loss,16,3,0.00642,0.00018

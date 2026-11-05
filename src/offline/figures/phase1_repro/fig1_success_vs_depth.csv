@@ -1,9 +1,9 @@
 agent,depth,n_seeds,mean_success,std,seeds,status
 crl,4,3,0.4267,0.1137,0.520;0.493;0.267,finished
 crl,8,3,0.5733,0.0218,0.573;0.547;0.600,finished
-crl,16,3,0.8311,0.0638,0.773;0.800;0.920,in-flight (lower bound)
-crl,32,3,0.7822,0.035,0.800;0.813;0.733,in-flight (lower bound)
+crl,16,3,0.8489,0.0514,0.827;0.800;0.920,finished
+crl,32,3,0.84,0.0288,0.827;0.813;0.880,in-flight (lower bound)
 gcbc,4,3,0.5956,0.0548,0.587;0.533;0.667,finished
 gcbc,8,3,0.7067,0.0109,0.693;0.707;0.720,finished
 gcbc,16,3,0.7022,0.0166,0.720;0.707;0.680,finished
-gcbc,32,3,0.6667,0.0435,0.720;0.667;0.613,in-flight (lower bound)
+gcbc,32,3,0.6889,0.0227,0.720;0.667;0.680,finished
