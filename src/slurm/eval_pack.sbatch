@@ -28,7 +28,13 @@ set -uo pipefail
 
 REPO=${REPO:-/home/vt7993/rl-scaling}
 PY=${PY:-/scratch/gpfs/vt7993/rl-scaling/venv/bin/python}
-: "${TASKS:?TASKS must be set (space-separated task json paths)}"
+# A FILE of task paths, one per line -- not a space-separated --export value. sbatch
+# splits --export on commas and a value containing spaces round-trips unreliably, which
+# would silently truncate the task list rather than fail.
+: "${TASK_FILE:?TASK_FILE must be set (a file of task json paths, one per line)}"
+[ -r "$TASK_FILE" ] || { echo "cannot read TASK_FILE=$TASK_FILE"; exit 1; }
+mapfile -t TASKS < "$TASK_FILE"
+[ "${#TASKS[@]}" -gt 0 ] || { echo "TASK_FILE is empty: $TASK_FILE"; exit 1; }
 
 export MUJOCO_GL=egl
 export TQDM_DISABLE=1
@@ -40,12 +46,12 @@ cd "$REPO" || exit 1
 
 echo "node: $(hostname)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-echo "tasks:"
-for t in $TASKS; do echo "  $t"; done
+echo "tasks (${#TASKS[@]} from $TASK_FILE):"
+for t in "${TASKS[@]}"; do echo "  $t"; done
 
 rc=0
 n=0
-for t in $TASKS; do
+for t in "${TASKS[@]}"; do
   n=$((n + 1))
   echo
   echo "================ [$n] $(basename "$t") ================"

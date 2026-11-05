@@ -248,12 +248,16 @@ def submit(cfg: dict, tasks: list, paths: list) -> int:
     script = os.path.join(repo, "src", "slurm", "eval_pack.sbatch")
     cap = _fmt_hms(sum(_hms(t["resources"].get("time_limit", "01:00:00"))
                        for t in tasks))
-    env = os.environ.copy()
-    env["TASKS"] = " ".join(paths)
+    # The task list goes in a FILE, not in --export. sbatch splits --export on commas
+    # and a value containing spaces round-trips unreliably; a truncated list would
+    # silently run fewer tasks instead of failing.
+    task_file = os.path.join(suite_dir(cfg), "tasks.txt")
+    with open(task_file, "w") as f:
+        f.write("\n".join(paths) + "\n")
     cmd = ["sbatch", f"--time={cap}", f"--job-name=crl-eval-{cfg['name']}",
-           "--export=ALL,TASKS=" + " ".join(paths), script]
-    print("  " + " ".join(cmd[:4]) + " ... " + script)
-    return subprocess.call(cmd, env=env)
+           f"--export=ALL,TASK_FILE={task_file}", script]
+    print("  " + " ".join(cmd))
+    return subprocess.call(cmd, env=os.environ.copy())
 
 
 def run_one(task_path: str) -> int:
