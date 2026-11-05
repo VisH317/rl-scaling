@@ -182,6 +182,18 @@ Other verified facts from the paper:
   trained to maximize the critic."* Ours is OGBench `actor_loss='ddpgbc'` =
   `q_loss + bc_loss` with `alpha=0.1`. Every success number we report is an extracted
   policy's, evaluated by rollout.
+- **The eval metric never touches a critic.** `evaluate()` calls only
+  `agent.sample_actions`, which selects only the `'actor'` network; the 2-member critic
+  ensemble's `min` appears only inside the actor's training loss. With
+  `eval_temperature=0.0` and `const_std=True` the scale is exactly 0, so the rollout is
+  a deterministic actor. Consequence: *"the critic is scaling"* is an inference about
+  the training signal, never a direct measurement. The only direct critic measurements
+  are the InfoNCE top-1 accuracy and the train/val contrastive losses.
+- **Which parameters each scoring convention uses.** `best_success` = live parameters at
+  the single best eval step. `last3_eval_mean` = live parameters at each of the last
+  three eval points — **three different networks**, 100k steps apart, averaged; a
+  noise-reduction device, not one policy's score. `reeval@50` = `params_best.pkl`, one
+  saved checkpoint (which holds actor and both critics, but only the actor is run).
 - **Their metric is not ours.** §4.1: *"we measure the number of time steps (out of
   1000) that the agent is near the goal"*, averaged over the last five epochs — dwell
   time, not binary success. Our numbers are comparable to OGBench's published table, not

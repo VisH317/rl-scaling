@@ -147,7 +147,39 @@ in this document is an extracted policy's**, not a critic-only metric. The diffe
 from theirs is the `bc_loss` term — offline, OGBench regularizes the actor toward the
 data, which the online paper does not need.
 
-### 2.2 Their evaluation metric is not ours
+### 2.2 What the eval metric actually touches: the actor only
+
+Worth stating plainly, because it constrains what §6.1 can claim. OGBench's
+`evaluate()` does exactly one thing with the agent:
+
+```python
+actor_fn = supply_rng(agent.sample_actions, ...)
+...
+action = actor_fn(observations=observation, goals=goal, temperature=eval_temperature)
+```
+
+and `CRLAgent.sample_actions` selects **only** the `'actor'` network. **The critic is
+never queried at evaluation time.** Neither is the 2-member critic ensemble, whose `min`
+appears only inside the actor's training loss. The critic's entire influence on every
+success number in this document is mediated through the actor's weights, via the
+`q_loss` term.
+
+With `eval_temperature=0.0` and `const_std=True`, `scale_diag = exp(0) * 0 = 0`, so the
+rollout is a **deterministic** actor: sampling returns the mean action.
+
+Which parameters each of our three scoring conventions uses:
+
+| convention | parameters evaluated |
+|---|---|
+| `best_success` | the **live** training parameters at the single best-scoring eval step |
+| `last3_eval_mean` | the live parameters at each of the last three eval points — **three different networks**, 100k steps apart, averaged. A noise-reduction device, not one policy's score |
+| `reeval@50` | `params_best.pkl`, one saved checkpoint. The pickle holds the whole agent, actor and both critics, but only the actor is exercised |
+
+So "the critic is scaling" is necessarily an inference about the *training signal*. The
+only direct measurements of the critic we have are §6.1's diagnostics — InfoNCE top-1
+accuracy and the train/validation contrastive losses.
+
+### 2.3 Their evaluation metric is not ours
 
 Their §4.1: *"For evaluation, we measure the number of time steps (out of 1000) that the
 agent is near the goal"*, reported as *"the average score over the last five epochs of
@@ -158,7 +190,7 @@ comparable to their headline figures — but they *are* comparable to OGBench's 
 table, which is the right comparator for an offline OGBench reproduction. Nothing here
 should be read as reproducing their online numbers.
 
-### 2.3 They scale actor and critic jointly — and so do we
+### 2.4 They scale actor and critic jointly — and so do we
 
 Their §4.1: *"the depth refers to the configuration of the actor network and both critic
 encoder networks, which are scaled jointly, except for the ablation experiment in
@@ -172,7 +204,7 @@ Ours scales jointly too. Measured from our checkpoints:
 | 16 | 4,346,112 | 1,078,536 | 1,078,536 |
 
 CRL's actor is **parameter-identical** to GCBC's at every depth. That is what licenses
-the contrast in §6.1 — but see §6.2, it is a contrast, not an isolation.
+the contrast in §6.1 — but see §6.2 — it is a contrast, not an isolation.
 
 Their §4.4 ("Scaling the Actor vs. Critic Networks", Figure 6) is the isolation, and the
 answer is environment-dependent: *"In Arm Push Easy, scaling the critic is more
@@ -181,7 +213,7 @@ necessary."* **We have not run this.** It is our `actor_thread` preset, declared
 `conf/experiment/` and not implemented — frozen-critic loading does not exist yet. It is
 now the highest-value missing experiment.
 
-### 2.4 Their setting is online; the offline result they report is NEGATIVE
+### 2.5 Their setting is online; the offline result they report is NEGATIVE
 
 Their §3: *"Our focus is on online RL, where a replay buffer stores the most recent
 trajectories."* Main experiments run on JaxGCRL / Brax / MJX locomotion and manipulation,
@@ -210,7 +242,7 @@ caption (available only as a summary, not verbatim): *"Our approach successfully
 depth in offline GCBC on antmaze-medium-stitch (OGBench)."* Our GCBC 53.5 → 65.2 then
 flat is broadly consistent with that.
 
-### 2.5 The most likely reason we disagree: we are not running their critic loss
+### 2.6 The most likely reason we disagree: we are not running their critic loss
 
 Confirmed from the run config of every CRL run in `phase1_repro`:
 
@@ -239,7 +271,7 @@ Their offline ablations also included *"scaling critic depth while holding the a
 encoders"* — the first is our `actor_thread`, the second our `arch=residual_cold`.
 Neither has been run.
 
-### 2.6 One reference line in our figures is unverified
+### 2.7 One reference line in our figures is unverified
 
 `fig1` draws a grey dashed reference at GCBC 0.47 (depth 2) → 0.63 (depth 32), labelled
 "1000-layer rebuttal (GCBC)". **Those two numbers do not appear anywhere in the paper
@@ -363,11 +395,11 @@ agent on the same data.
 
 **GCBC saturates at depth 8**: 53.5 → 65.2 (real, SDs 6.8 and 1.6, non-overlapping),
 then flat at 62.5 and 61.2. (A reference value of 0.63 at depth 32 is recorded in our
-figures as coming from the paper's rebuttal; it is **unverified** — see §2.6.)
+figures as coming from the paper's rebuttal; it is **unverified** — see §2.7.)
 
 ### 6.1 Is this the critic, or just a bigger network?
 
-Our depth axis moves the **actor and the critic together** (§2.3), so this grid cannot
+Our depth axis moves the **actor and the critic together** (§2.4), so this grid cannot
 isolate the two. What it supports is a contrast, not an isolation:
 
 - CRL's actor is **parameter-identical** to GCBC's at every depth (282,888 at d4;
@@ -410,8 +442,8 @@ sit between 0.9991 and 0.9993. `fig3` labels it as such.)
 
 ### 6.2 Caveats on the scaling claim
 
-1. **It contradicts the paper's own offline finding** (§2.4), which is reason to look
-   for our error before celebrating. Leading candidate is §2.5: we ran OGBench's
+1. **It contradicts the paper's own offline finding** (§2.5), which is reason to look
+   for our error before celebrating. Leading candidate is §2.6: we ran OGBench's
    binary-NCE/dot critic, not the paper's InfoNCE/L2/logsumexp one.
 2. **Actor and critic depth are not separated** (§6.1). The paper's §4.4 ablation is the
    missing experiment.
