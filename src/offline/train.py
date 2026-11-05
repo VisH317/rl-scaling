@@ -151,7 +151,7 @@ def main() -> int:
     args = ap.parse_args()
 
     from offline import config as C
-    from offline.critic_losses import install_critic_loss
+    from offline.critic_losses import install_critic_ensemble, install_critic_loss
     from offline.patches import agent_param_report, build_config, install_residual_arch
 
     # ---- resolve the run config -------------------------------------------------
@@ -228,6 +228,8 @@ def main() -> int:
         # Must happen BEFORE the agent is built, and for the whole process: Flax
         # re-enters the loss on every apply.
         run_cfg["critic_loss_patched"] = install_critic_loss(run_cfg["agent"])
+        run_cfg["critic_ensemble_patched"] = install_critic_ensemble(
+            int(run_cfg["agent"].get("critic_ensemble", 2)))
         agent = agent_class.create(
             run_cfg["seed"], example["observations"], example["actions"], og_cfg
         )

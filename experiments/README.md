@@ -101,3 +101,30 @@ the optimizer.
 `psi(g)` — that is the bilinear critic. OGBench additionally vmaps each into a 2-member
 *ensemble* (4 towers, giving `q1`/`q2` for the actor's `min`); the paper uses 1 member
 (2 towers). We keep OGBench's 2. Recorded, not silently accepted.
+
+## Estimating runtime before you submit
+
+```bash
+$V src/scripts/estimate_runtime.py experiments/humanoid_ensemble1.yaml --verbose
+$V src/scripts/estimate_runtime.py --calibrate    # refit from finished runs
+```
+
+Two costs, modelled separately because they scale with different things:
+
+- **train** — `step_cap / throughput`. Throughput falls with depth and width, and CRL
+  costs ~2.6× GCBC at equal depth.
+- **eval** — `(step_cap / eval_interval)` evaluations, each `5 tasks × eval_episodes`
+  rollouts of up to `max_episode_steps`. The term people forget. On humanoidmaze the
+  episode limit is **2000** rather than antmaze's 1000, so eval is **31%** of that
+  experiment's total rather than 13%. A failing policy never terminates early, so eval
+  costs most exactly when a run is going badly.
+
+Constants are calibrated from this project's finished runs (`--calibrate` refits and
+prints them to paste back). Cells with no measurement at that depth are extrapolated
+and **labelled** — an estimate never quietly presents itself as a measurement. The
+episode limit is read from the gym registry and the script **refuses to guess** if it
+cannot resolve one, because OGBench's env id is not the dataset name
+(`humanoidmaze-medium-navigate-v0` → env `humanoidmaze-medium-v0`) and a silent
+fallback to 1000 halves every humanoid estimate.
+
+`run.py` prints the same model's headline, so there is only one cost number.

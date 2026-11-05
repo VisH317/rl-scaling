@@ -1,0 +1,42 @@
+# Phase 1's depth sweep, moved to a humanoid body, with a SINGLE critic encoder pair.
+#
+# Changes from phase1_repro, and only these:
+#   dataset          antmaze-medium-stitch -> humanoidmaze-medium-navigate
+#   critic_ensemble  2 -> 1          (the paper's setting; newly implemented)
+#   depth            drops 32        (humanoid eval is 2x, so 32 would not finish)
+#
+# Everything else is phase1_repro's: binary NCE on dot-product logits, no logsumexp
+# penalty ("BCE for now"), residual tower width 256, repr_dim 64, lr 3e-4 constant,
+# batch 1024, 3 seeds, published per-dataset flags.
+#
+# Note the env, not just the body: humanoidmaze-medium is the SAME 8x8 maze with the
+# SAME five (start, goal) cell pairs as antmaze-medium, so the first-move-angle
+# analysis in research_log 1.11 carries over and task 4 is still the forced 180 detour.
+# But `-navigate` is NOT `-stitch`: its trajectories are 1001 steps, not 201, so a
+# single trajectory can cover a whole route and far less stitching is required.
+# Expect the CRL-vs-GCBC task split to look different for that reason alone.
+#
+# OGBench's published CRL command for this dataset sets discount=0.995 (not 0.99),
+# which doubles the geometric goal-sampling horizon. `use_published_flags` picks that
+# up automatically -- do not hand-set `discount` here.
+#
+#   python src/scripts/estimate_runtime.py experiments/humanoid_ensemble1.yaml --verbose
+#   python src/run.py experiments/humanoid_ensemble1.yaml --submit
+
+name: humanoid_ensemble1
+dataset: humanoidmaze-medium-navigate-v0
+seeds: [0, 1, 2]
+
+agent: [crl, gcbc]
+depth: [4, 8, 16]
+
+profile: ogbench               # binary_nce + dot + no logsumexp penalty
+critic_ensemble: 1             # <- the one deliberate change
+
+repr_dim: 64
+tower: residual
+width: 256
+block_size: 4
+
+step_cap: 2000000
+plateau_min_steps: 1000000

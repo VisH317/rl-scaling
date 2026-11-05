@@ -58,6 +58,14 @@ step "3b. critic losses: infonce / neg_l2 / logsumexp penalty"
 $PY -m offline.critic_losses
 check $?
 
+step "3b2. runtime estimator fits every experiment"
+for f in "$REPO"/experiments/*.yaml; do
+  case "$(basename "$f")" in TEMPLATE.yaml) continue ;; esac
+  $PY "$REPO/src/scripts/estimate_runtime.py" "$f" >/dev/null \
+    || { echo "  FAILED to estimate $(basename "$f")"; false; }
+done
+check $?
+
 step "3c. every experiments/*.yaml resolves, and the committed ones are unchanged"
 for f in "$REPO"/experiments/*.yaml; do
   case "$(basename "$f")" in TEMPLATE.yaml) continue ;; esac

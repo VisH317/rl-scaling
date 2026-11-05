@@ -123,6 +123,18 @@ DATASETS: dict[str, DatasetSpec] = {
         ob_dim=29, act_dim=8,
         train_bytes=232_000_000, val_bytes=23_000_000,
     ),
+    # Humanoid locomotion in the SAME 8x8 maze as antmaze-medium, with the same five
+    # (start, goal) cell pairs -- so the first-move-angle analysis in research_log 1.11
+    # transfers unchanged. What differs is the body: ob 69-D (vs 29), act 21-D (vs 8),
+    # qpos/qvel 28/27 (vs 15/14), and `max_episode_steps=2000` (vs 1000), which doubles
+    # the cost of every evaluation episode.
+    "humanoidmaze-medium-navigate-v0": DatasetSpec(
+        name="humanoidmaze-medium-navigate-v0",
+        env_name="humanoidmaze-medium-navigate-v0",
+        traj_len=1001, n_train_trajs=1000, n_val_trajs=100,
+        ob_dim=69, act_dim=21,
+        train_bytes=1_073_741_824, val_bytes=107_374_182,
+    ),
     "antmaze-large-navigate-v0": DatasetSpec(
         name="antmaze-large-navigate-v0",
         env_name="antmaze-large-navigate-v0",
@@ -437,6 +449,16 @@ class AgentConfig:
 #: Every published command also uses --eval_episodes=50; we evaluate with 15 during
 #: training (cheap curves) and re-evaluate the best checkpoint at 50 for the headline.
 PUBLISHED_FLAGS: dict[tuple[str, str], dict] = {
+    # hyperparameters.sh L257:
+    #   --env_name=humanoidmaze-medium-navigate-v0 --eval_episodes=50 \
+    #   --agent=agents/crl.py --agent.alpha=0.1 --agent.discount=0.995
+    # NOTE the discount: 0.995, not 0.99. It is not a TD discount here -- CRL has no
+    # bootstrap -- it sets the geometric goal-sampling horizon, 1/(1-g) = 200 steps
+    # instead of 100. On 1001-step trajectories that is a materially different value
+    # goal distribution, so it must not be left at the default.
+    ("humanoidmaze-medium-navigate-v0", "crl"): dict(alpha=0.1, discount=0.995),
+    # L249: `--agent=agents/gcbc.py` with no flags at all.
+    ("humanoidmaze-medium-navigate-v0", "gcbc"): dict(),
     ("antmaze-medium-stitch-v0", "crl"): dict(
         actor_p_trajgoal=0.5, actor_p_randomgoal=0.5, alpha=0.1,
     ),

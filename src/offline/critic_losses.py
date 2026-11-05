@@ -192,3 +192,87 @@ def _selftest() -> None:
 
 if __name__ == "__main__":
     _selftest()
+
+
+# ---------------------------------------------------------------------------
+# Critic ensemble size
+# ---------------------------------------------------------------------------
+# OGBench hardcodes a 2-member ensemble: `GCBilinearValue.setup` calls
+# `ensemblize(MLP, 2)` for each of phi and psi, and `CRLAgent.actor_loss` then does
+# `q1, q2 = critic(...)`. The 1000-layer paper uses one member. Supporting that needs
+# two coordinated patches -- changing only the first makes the actor unpack a
+# length-1 axis and crash, which is why `run.py` refused `critic_ensemble: 1` until
+# both existed.
+#
+# `contrastive_loss` needs no change: it already promotes a 2-D phi to 3-D, and with
+# axis_size=1 the arrays simply carry a leading 1.
+
+_ENSEMBLE_N: int | None = None
+_orig_ensemblize = None
+
+
+def _reduce_q(qs):
+    """(E, B) -> (B) by min; passes a bare (B,) through.
+
+    `min` over the ensemble is OGBench's own choice (`jnp.minimum(q1, q2)`), kept so a
+    2-member run is bit-identical to unpatched OGBench.
+    """
+    return jnp.min(qs, axis=0) if qs.ndim > 1 else qs
+
+
+def _patched_actor_loss(self, batch, grad_params, rng=None):
+    """`ddpgbc` only, rewritten to reduce over the ensemble axis generically."""
+    cfg = self.config
+    if cfg["actor_loss"] != "ddpgbc":
+        raise NotImplementedError(
+            f"ensemble patch supports actor_loss='ddpgbc', not {cfg['actor_loss']!r}")
+    dist = self.network.select("actor")(
+        batch["observations"], batch["actor_goals"], params=grad_params)
+    q_actions = jnp.clip(dist.mode() if cfg["const_std"] else dist.sample(seed=rng),
+                         -1, 1)
+    qs = self.network.select("critic")(
+        batch["observations"], batch["actor_goals"], q_actions)
+    q = _reduce_q(qs)
+
+    q_loss = -q.mean() / jax.lax.stop_gradient(jnp.abs(q).mean() + 1e-6)
+    log_prob = dist.log_prob(batch["actions"])
+    bc_loss = -(cfg["alpha"] * log_prob).mean()
+    actor_loss = q_loss + bc_loss
+    return actor_loss, {
+        "actor_loss": actor_loss, "q_loss": q_loss, "bc_loss": bc_loss,
+        "q_mean": q.mean(), "q_abs_mean": jnp.abs(q).mean(),
+        "bc_log_prob": log_prob.mean(),
+        "mse": jnp.mean((dist.mode() - batch["actions"]) ** 2),
+        "std": jnp.mean(dist.scale_diag),
+    }
+
+
+def install_critic_ensemble(n: int) -> bool:
+    """Set the critic ensemble size for the REST OF THE PROCESS. True if patched.
+
+    A no-op at n == 2, so the default path keeps running OGBench's own code.
+    Must be called BEFORE the agent is constructed -- it changes how phi/psi are built.
+    """
+    global _ENSEMBLE_N, _orig_ensemblize
+    if n == 2:
+        _ENSEMBLE_N = None
+        return False
+    if n < 1:
+        raise ValueError(f"critic_ensemble must be >= 1, got {n}")
+
+    import agents.crl as crl_mod
+    import utils.networks as nets
+
+    if _orig_ensemblize is None:
+        _orig_ensemblize = nets.ensemblize
+    _ENSEMBLE_N = int(n)
+
+    def ensemblize(cls, num_qs, out_axes=0, **kw):
+        # `num_qs` is hardcoded 2 at the call site; override it, keep everything else.
+        return _orig_ensemblize(cls, _ENSEMBLE_N, out_axes=out_axes, **kw)
+
+    # GCBilinearValue calls `ensemblize` as a module-global, resolved at call time,
+    # so rebinding it on the module is enough.
+    nets.ensemblize = ensemblize
+    crl_mod.CRLAgent.actor_loss = _patched_actor_loss
+    return True

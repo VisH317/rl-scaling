@@ -50,6 +50,9 @@ except ImportError:  # pragma: no cover
 #: penalty is what removes the invariance. Setting `critic_loss: infonce` with
 #: `logsumexp_penalty: 0` would break actor extraction for reasons unrelated to depth,
 #: so the profiles exist to make the coupled choice the easy one.
+#: `critic_ensemble` IS now implemented (offline/critic_losses.py) -- it needs two
+#: coordinated patches, ensemblize's axis_size and the actor's `q1, q2` unpack, so it
+#: was a hard error until both existed. n=2 stays a no-op on OGBench's own code.
 PROFILES: dict[str, dict] = {
     "ogbench": dict(
         critic_loss="binary_nce", logits="dot", logsumexp_penalty=0.0,
@@ -64,7 +67,7 @@ PROFILES: dict[str, dict] = {
     # accepted.
     "scaling_crl": dict(
         critic_loss="infonce", logits="neg_l2", logsumexp_penalty=0.1,
-        batch_size=256, repr_dim=64,
+        critic_ensemble=1, batch_size=256, repr_dim=64,
     ),
     "stable_crl": dict(
         critic_loss="binary_nce", logits="dot", logsumexp_penalty=0.0,
@@ -75,7 +78,8 @@ PROFILES: dict[str, dict] = {
 #: Keys that may be swept (appear as a list). Everything else must be a scalar.
 SWEEPABLE = {"agent", "depth", "data_size", "profile", "repr_dim", "width",
              "critic_loss", "logits", "logsumexp_penalty", "batch_size", "lr",
-             "alpha", "init", "tower", "block_size", "critic_ensemble", "seeds"}
+             "alpha", "init", "tower", "block_size", "critic_ensemble", "seeds",
+             "discount"}
 
 DEFAULTS: dict = dict(
     name=None, dataset="antmaze-medium-stitch-v0", seeds=[0, 1, 2], data_size=None,
@@ -84,7 +88,8 @@ DEFAULTS: dict = dict(
     repr_dim=64,
     tower="residual", width=256, block_size=4, activation="swish", norm="layer_norm",
     init="lecun_uniform",
-    actor_loss="ddpgbc", alpha=None, actor_p_trajgoal=None, actor_p_randomgoal=None,
+    actor_loss="ddpgbc", alpha=None, discount=None,
+    actor_p_trajgoal=None, actor_p_randomgoal=None,
     use_published_flags=True,
     lr=3.0e-4, batch_size=None, schedule="constant", warmup_steps=0,
     max_grad_norm=0.0, weight_decay=0.0,
@@ -97,6 +102,12 @@ DEFAULTS: dict = dict(
 #: Deviating from any of these confounds the depth axis.
 OPTIM_BASELINE = dict(lr=3.0e-4, schedule="constant", warmup_steps=0,
                       max_grad_norm=0.0, weight_decay=0.0)
+
+#: YAML keys that may override a profile or a published flag. Anything here is read
+#: from the experiment file when set; `None` means "take the profile/published value".
+OVERRIDABLE = ("critic_loss", "logits", "logsumexp_penalty", "critic_ensemble",
+               "batch_size", "repr_dim", "alpha", "init", "discount",
+               "actor_p_trajgoal", "actor_p_randomgoal")
 
 #: Knobs the config can express but NOTHING downstream reads. Setting one of these
 #: silently does nothing, which is worse than not offering it -- so `run.py` refuses
@@ -112,10 +123,6 @@ UNIMPLEMENTED: dict[str, tuple[object, str]] = {
     "warmup_steps": (0, "same: no schedule wrapper exists"),
     "max_grad_norm": (0.0, "same: no optax.clip_by_global_norm in the chain"),
     "weight_decay": (0.0, "same: adam, not adamw"),
-    "critic_ensemble": (2,
-                        "crl.py hardcodes ensemble=True and its ddpgbc actor unpacks "
-                        "`q1, q2 = critic(...)`, so 1 would crash. Patching this means "
-                        "patching the actor loss too"),
     "actor_loss": ("ddpgbc",
                    "awr needs a separate value network; build_config does not create "
                    "one, so it would fail at agent construction"),
@@ -201,28 +208,36 @@ def _one(p: dict, seed: int, swept: list[str] = ()) -> dict:
     prof = dict(PROFILES[p["profile"]])
     pub = (C.PUBLISHED_FLAGS.get((p["dataset"], agent_name), {})
            if p["use_published_flags"] else {})
-    explicit = {k: p[k] for k in
-                ("critic_loss", "logits", "logsumexp_penalty", "critic_ensemble",
-                 "batch_size", "repr_dim", "alpha", "init",
-                 "actor_p_trajgoal", "actor_p_randomgoal")
-                if p.get(k) is not None}
+    explicit = {k: p[k] for k in OVERRIDABLE if p.get(k) is not None}
     merged = {**prof, **pub, **explicit}
 
+    # Build the defaults first, then overlay `merged` wholesale. Listing the keys to
+    # copy by hand is how `discount: 0.995` -- OGBench's published value for
+    # humanoidmaze -- ended up recorded in `published_flags` but never applied: the
+    # hand-written list did not mention it. Anything a profile or a published command
+    # can carry now lands, and an unknown key is an error rather than a silent drop.
     agent = dict(
         agent=agent_name, recipe=p["profile"],
-        critic_loss=merged.get("critic_loss", "binary_nce"),
-        logits=merged.get("logits", "dot"),
-        logsumexp_penalty=float(merged.get("logsumexp_penalty", 0.0)),
-        critic_ensemble=int(merged.get("critic_ensemble", 2)),
-        batch_size=int(merged.get("batch_size", 1024)),
-        lr=float(p["lr"]), discount=0.99,
-        alpha=float(merged.get("alpha", 0.1)),
+        critic_loss="binary_nce", logits="dot", logsumexp_penalty=0.0,
+        critic_ensemble=2, batch_size=1024,
+        lr=float(p["lr"]), discount=0.99, alpha=0.1,
         actor_loss=p["actor_loss"], const_std=True,
         value_p_trajgoal=1.0, value_p_randomgoal=0.0, value_geom_sample=True,
-        actor_p_trajgoal=float(merged.get("actor_p_trajgoal", 1.0)),
-        actor_p_randomgoal=float(merged.get("actor_p_randomgoal", 0.0)),
-        actor_geom_sample=False,
+        actor_p_trajgoal=1.0, actor_p_randomgoal=0.0, actor_geom_sample=False,
     )
+    arch_only = {"repr_dim", "init"}
+    for k, v in merged.items():
+        if k in arch_only:
+            continue
+        if k not in agent:
+            sys.exit(f"profile/published flag {k!r} has nowhere to go in the agent "
+                     f"config; add it to the defaults in run.py._one")
+        agent[k] = type(agent[k])(v) if not isinstance(v, str) else v
+    unapplied = {k: v for k, v in pub.items() if agent.get(k) != v
+                 and k not in explicit}
+    if unapplied:
+        sys.exit(f"published flags {unapplied} did not reach the agent config -- "
+                 f"this is the bug class that produced the actor_p_trajgoal error")
     arch = dict(
         depth=int(p["depth"]), width=int(p["width"]),
         repr_dim=int(merged.get("repr_dim", p["repr_dim"])),
@@ -308,9 +323,6 @@ def check(cfg: dict, runs: list[dict]) -> list[str]:
     return sorted(set(warn))
 
 
-#: steps/s measured on Stellar, phase 1. Used only for the time estimate.
-THROUGHPUT = {("crl", 4): 151, ("crl", 8): 85, ("crl", 16): 49, ("crl", 32): 25,
-              ("gcbc", 4): 400, ("gcbc", 8): 263, ("gcbc", 16): 186, ("gcbc", 32): 107}
 
 
 def plan(cfg: dict, runs: list[dict], source: str) -> None:
@@ -336,6 +348,7 @@ def plan(cfg: dict, runs: list[dict], source: str) -> None:
           f"repr_dim={spread(lambda r: r['arch']['repr_dim'])}")
     print(f"  actor     {spread(lambda r: r['agent']['actor_loss'])}  "
           f"alpha={spread(lambda r: r['agent']['alpha'])}  "
+          f"discount={spread(lambda r: r['agent']['discount'])}  "
           f"p_trajgoal={spread(lambda r: r['agent']['actor_p_trajgoal'])}/"
           f"p_randomgoal={spread(lambda r: r['agent']['actor_p_randomgoal'])}")
     print(f"  arch      {spread(lambda r: r['arch']['tower'])}  "
@@ -350,13 +363,26 @@ def plan(cfg: dict, runs: list[dict], source: str) -> None:
           f"plateau>={cfg['plateau_min_steps']:,}  "
           f"eval every {cfg['eval_interval']:,} x {cfg['eval_episodes']} eps/task")
 
-    hours = sum(r["step_cap"] / THROUGHPUT.get((r["agent"]["agent"],
-                                                r["arch"]["depth"]), 100) / 3600
-                for r in runs)
+    # One cost model, in scripts/estimate_runtime.py. Having a second rough one here
+    # only produced two numbers that disagreed.
     slots = max(1, cfg["gpus_per_job"] * cfg["runs_per_gpu"])
-    print(f"  cost      ~{hours:.0f} GPU-hours at the step cap; "
-          f"~{hours / slots:.0f} h wall across {slots} concurrent slots "
-          f"({-(-len(runs) // slots)} packs of {slots})")
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "scripts"))
+        import estimate_runtime as E
+        ds = C.DATASETS[cfg["dataset"]]
+        for r in runs:
+            r["_ob_dim"], r["_act_dim"] = ds.ob_dim, ds.act_dim
+        est = E.estimate(runs, E.max_episode_steps(cfg["dataset"]))
+        print(f"  cost      {est['total_h']:.0f} GPU-h "
+              f"({est['train_h']:.0f} train + {est['eval_h']:.0f} eval); "
+              f"~{est['total_h'] / slots:.0f} h wall across {slots} slots "
+              f"({-(-len(runs) // slots)} packs)"
+              + ("   [extrapolated]" if est["extrapolated"] else ""))
+        print(f"            full breakdown: python src/scripts/estimate_runtime.py "
+              f"{cfg.get('_source', '<yaml>')} --verbose")
+    except SystemExit as e:
+        print(f"  cost      unavailable: {e}")
 
     for w in check(cfg, runs):
         print(f"\n  WARNING  {w}")

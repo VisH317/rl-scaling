@@ -57,7 +57,7 @@ def reeval_one(run_dir: str, episodes: int, checkpoint: str = "best") -> dict | 
     import agents as og_agents
 
     from offline.datasets import build_datasets
-    from offline.critic_losses import install_critic_loss
+    from offline.critic_losses import install_critic_ensemble, install_critic_loss
     from offline.patches import build_config, install_residual_arch
 
     cfg_p = os.path.join(run_dir, "config.json")
@@ -75,6 +75,7 @@ def reeval_one(run_dir: str, episodes: int, checkpoint: str = "best") -> dict | 
 
     install_residual_arch(run_cfg["arch"])
     install_critic_loss(run_cfg["agent"])
+    install_critic_ensemble(int(run_cfg["agent"].get("critic_ensemble", 2)))
     ex = train_dataset.sample(1)
     agent = og_agents.agents[agent_name].create(
         run_cfg["seed"], ex["observations"], ex["actions"], og_cfg
