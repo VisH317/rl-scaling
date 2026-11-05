@@ -48,7 +48,8 @@ a ~ clip(π, -1, 1)                    final layer init scale 1e-2
 
 ## 3. Losses
 
-**Critic — symmetric binary NCE over the B×B pair matrix.** `L = φΨᵀ/√d`,
+**Critic — elementwise binary NCE over the B×B pair matrix** (see §3.1 for why this
+is neither "forward" nor "backward"). `L = φΨᵀ/√d`,
 `L[i,j] = Q(sᵢ, aᵢ, g_v,ⱼ)`. The diagonal is the positive pairs:
 
 ```
@@ -58,6 +59,61 @@ a ~ clip(π, -1, 1)                    final layer init scale 1e-2
 Averaged over the 2 ensemble members. **No logsumexp penalty.** There is **no TD
 backup** anywhere — `discount` enters only through goal sampling (§4), never a
 bootstrap. This is what makes CRL self-supervised rather than dynamic-programming.
+
+### 3.1 Which contrastive loss is this? Neither forward nor backward.
+
+Forward/backward/symmetric are properties of **softmax** losses — they name the axis you
+normalize over. OGBench's loss normalizes over **no axis**: `optax.sigmoid_binary_cross_entropy`
+is applied elementwise to all `B²` entries, each an independent binary
+"is this pair real?" classification. So the direction question does not apply to it.
+
+It is symmetric in the only sense available: verified numerically, the loss is exactly
+invariant under transposing the logit matrix, `𝓛(L) = 𝓛(Lᵀ)`. (The matrix itself is not
+symmetric — rows are `(s,a)`, columns are goals, and `φ ≠ ψ`.)
+
+For contrast, the three softmax variants, with `L[i,j] = f(sᵢ,aᵢ,gⱼ)`:
+
+| | form | normalizes over |
+|---|---|---|
+| forward InfoNCE | `−mean( diag(L) − logsumexp(L, axis=1) )` | goals, per `(s,a)` |
+| backward InfoNCE | same with `axis=0` | `(s,a)`, per goal |
+| symmetric / CLIP | mean of the two | both |
+
+**The 1000-layer paper uses forward InfoNCE** — recorded from `scaling-crl/train.py` as
+`−mean(diag − logsumexp(axis=1))`, plus a logsumexp penalty of 0.1. Verified numerically
+that forward ≠ backward in general, and that forward-on-`Lᵀ` equals backward-on-`L`.
+
+### 3.2 Why BCE and not InfoNCE?
+
+**The honest first answer: we inherited it.** OGBench is the base codebase because it is
+the maintained offline GCRL implementation with the published antmaze-stitch numbers we
+anchor to, and `crl.py` ships binary NCE. This was not a scientific choice, which is
+exactly why it is open question **Q1** rather than a settled decision.
+
+**The principled argument for binary NCE in *this* setting**, which is why both offline
+codebases (OGBench and stable-CRL) use it:
+
+Forward InfoNCE's row softmax is invariant to adding any `c(s,a)` to a whole row. So it
+identifies `p^π(g|s,a)/p(g)` only **up to an arbitrary function of `(s,a)`**. The actor
+does `max_a Q(s,a,g)`, which compares *different rows* — precisely the direction the
+invariance destroys. Binary NCE has no such freedom: every entry is independently
+calibrated against a `0/1` label, so the absolute logit carries meaning, which is also
+what makes the 2-ensemble `min` a sensible operation.
+
+The paper's **logsumexp penalty is the fix for exactly this** — penalizing
+`logsumexp(L, axis=1)` pins the per-row constant that the softmax leaves free. (That is
+our reading of its role, not a quote from the paper.) The practical consequence for Q1:
+**swapping in InfoNCE without the logsumexp penalty is not a fair test** — it would
+likely break actor extraction for a reason unrelated to depth. `q1_loss_pilot` must vary
+`critic_loss`, `logits` and `logsumexp_penalty` together, as one recipe.
+
+**A side effect worth knowing.** Binary NCE over the full matrix has a class balance of
+`B` positives to `B²−B` negatives — at `B = 1024`, **1:1023**. The loss is dominated by
+negatives, and "always predict negative" already scores 0.999 accuracy. This is why
+`binary_accuracy` is a useless diagnostic here, and why OGBench additionally logs
+`categorical_accuracy` — a *row-argmax*, i.e. an InfoNCE-style readout of a
+BCE-trained critic. That readout is the diagnostic our `fig3` uses, and it is the one
+that scales cleanly with depth (0.369 → 0.583).
 
 **Actor — DDPG + BC** (`actor_loss='ddpgbc'`). `â ~ π(·|s, g_a)`, clipped:
 

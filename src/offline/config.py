@@ -363,6 +363,14 @@ class AgentConfig:
     #: OPEN QUESTION Q1. The 1000-layer depth result used infonce+l2+logsumexp;
     #: both offline codebases use binary_nce+dot. Keeping both switchable so the
     #: pilot can settle it instead of us guessing.
+    #:
+    #: These three fields MUST be varied together, never one at a time. Forward
+    #: InfoNCE's row softmax is invariant to adding c(s,a) to a row, so it pins the
+    #: density ratio only up to a function of (s,a) -- and the actor's max_a Q(s,a,g)
+    #: compares exactly across that freedom. The logsumexp penalty is what anchors the
+    #: per-row constant. InfoNCE with logsumexp_penalty=0.0 would therefore likely
+    #: break actor extraction for a reason that has nothing to do with depth.
+    #: See algorithm.md section 3.2.
     critic_loss: Literal["binary_nce", "infonce"] = "binary_nce"
     logits: Literal["dot", "neg_l2"] = "dot"
     logsumexp_penalty: float = 0.0       # scaling-crl uses 0.1 with infonce
