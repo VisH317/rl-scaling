@@ -319,6 +319,8 @@ def main() -> int:
     ap.add_argument("--submit", action="store_true")
     ap.add_argument("--figures", action="store_true")
     ap.add_argument("--status", action="store_true")
+    ap.add_argument("--report", action="store_true",
+                    help="fill offline/evals/results_<suite>.md from the template")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--run", metavar="TASK_JSON")
     args = ap.parse_args()
@@ -335,6 +337,11 @@ def main() -> int:
     tasks, notes = resolve(cfg)
     if args.figures:
         return figures(cfg)
+    if args.report:
+        from offline.evals import report
+        figures(cfg)
+        report.build(cfg, suite_dir(cfg))
+        return 0
     if args.status:
         return status(cfg, tasks)
 

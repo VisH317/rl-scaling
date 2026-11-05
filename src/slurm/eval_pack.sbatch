@@ -53,8 +53,10 @@ for t in $TASKS; do
 done
 
 echo
-echo "== figures =="
-$PY "$REPO/src/eval.py" --figures || rc=1
+echo "== figures + report =="
+# --report draws the figures, copies them into the repo and fills the AUTO blocks of
+# offline/evals/results_<suite>.md. Prose written between those blocks is preserved.
+$PY "$REPO/src/eval.py" --report || rc=1
 
 echo
 echo "exit $rc  ($n tasks)"
