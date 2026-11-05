@@ -131,6 +131,17 @@ fallback to 1000 halves every humanoid estimate.
 
 ## Watching things run
 
+Stellar's system `python3` is 3.6.8 and this project needs 3.9+. The four user-facing
+entry points — `src/run.py`, `dashboard.py`, `estimate_runtime.py`, `monitor.py` — now
+re-exec themselves into the project venv, so running them directly works:
+
+```bash
+src/scripts/dashboard.py --watch 30         # no interpreter prefix needed
+```
+
+(Set `RL_SCALING_PYTHON` if your venv is somewhere else. The `$V` prefix below still
+works and is still what the sbatch scripts use.)
+
 ```bash
 $V src/scripts/dashboard.py                 # everything you have, one snapshot
 $V src/scripts/dashboard.py --watch 30      # live, refreshing

@@ -23,7 +23,31 @@ constants to paste back). Anything not covered by a measurement is extrapolated 
 labelled as such, so an estimate never quietly pretends to be a measurement.
 """
 
-from __future__ import annotations
+# --- interpreter guard ------------------------------------------------------
+# Stellar's system python3 is 3.6.8; this project needs 3.9+. Running this file
+# directly picks up /usr/bin/python3 via the shebang and used to die with
+# "SyntaxError: future feature annotations is not defined" -- an error that names
+# neither the real cause nor the fix. Re-exec into the project venv instead, so
+# `./src/scripts/<name>.py` and `$VENV/bin/python src/scripts/<name>.py` both work.
+#
+# This block must stay 3.6-parseable and above every other import. Annotations
+# below are fine: they are evaluated when each `def` runs, which is after this.
+import os
+import sys
+
+_PY = os.environ.get("RL_SCALING_PYTHON") or os.path.join(
+    os.environ.get("RL_SCALING_SCRATCH", "/scratch/gpfs/vt7993"),
+    "rl-scaling", "venv", "bin", "python")
+if sys.version_info < (3, 9):
+    if not os.path.exists(_PY):
+        sys.stderr.write(
+            "this needs Python 3.9+ (found %d.%d) and the project venv is not at\n"
+            "  %s\nSet RL_SCALING_PYTHON to your interpreter, or run it as\n"
+            "  <venv>/bin/python %s\n"
+            % (sys.version_info[0], sys.version_info[1], _PY, __file__))
+        raise SystemExit(1)
+    os.execv(_PY, [_PY, os.path.abspath(__file__)] + sys.argv[1:])
+# ----------------------------------------------------------------------------
 
 import argparse
 import csv
