@@ -768,7 +768,8 @@ def fig_per_task(runs, out_dir, grid, n_tasks=5):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--grid", default="phase1_repro", choices=list(C.GRIDS))
+    # No `choices`: see monitor.py.
+    ap.add_argument("--grid", default="phase1_repro")
     ap.add_argument("--out-dir")
     ap.add_argument("--heatmap", action="store_true",
                     help="also draw the depth x data heatmap (needs >1 dataset size)")

@@ -1,0 +1,12 @@
+# The depth sweep we ran. CRL 34.1 -> 49.3 -> 71.4 at depths 4/8/16.
+# Reproduce with:  python src/run.py experiments/phase1_repro.yaml --submit
+name: phase1_repro
+dataset: antmaze-medium-stitch-v0
+seeds: [0, 1, 2]
+agent: [crl, gcbc]
+depth: [4, 8, 16, 32]
+profile: ogbench               # binary_nce + dot + no penalty
+repr_dim: 64
+tower: residual
+width: 256
+step_cap: 2000000

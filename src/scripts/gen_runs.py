@@ -70,7 +70,8 @@ def save_manifest(rows: list[dict]) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--grid", required=True, choices=list(C.GRIDS))
+    ap.add_argument("--grid", required=True, choices=list(C.GRIDS),
+                    help="LEGACY. New experiments go through src/run.py.")
     ap.add_argument("--append", action="store_true",
                     help="add to an existing manifest instead of replacing it")
     ap.add_argument("--dry-run", action="store_true")

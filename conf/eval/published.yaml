@@ -1,4 +1,0 @@
-# Evaluate at the published count DURING training. ~3.3x the eval cost; use when a
-# run must be directly comparable to OGBench's table without a post-hoc pass.
-defaults: [default]
-episodes: 50

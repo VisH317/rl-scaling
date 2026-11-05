@@ -6,6 +6,24 @@ the three reference codebases (scaling-crl, OGBench impls, stable-CRL), all thre
 the one we use is marked.
 
 Run `python -m offline.config` to print a resolved summary and sanity-check the grids.
+
+REGISTRY, NOT A KNOB SURFACE (changed 2026-11-05)
+-------------------------------------------------
+Experiments are now defined by a single YAML in `experiments/`, resolved by `src/run.py`.
+What still lives here and is still authoritative:
+
+    DATASETS, DOWNLOAD_PLAN      the dataset registry and shard layout
+    PUBLISHED_FLAGS              OGBench's published per-(dataset, agent) commands
+    *_DIR paths, SubsetPlan      where things live on scratch
+    _run_id, _subset_id          identity, shared with run.py
+
+What is superseded: GRIDS, ArchConfig/AgentConfig/TrainConfig/OptimConfig as a place to
+*tune* anything. They remain as the annotated record of verified source values -- the
+three-codebase comparison tables in their docstrings are the point -- and `run.py`'s
+DEFAULTS mirror them. Do not add a new experiment here; add a YAML.
+
+The Hydra layer (`conf/`, `offline/schema.py`, `scripts/launch.py`) was removed in
+favour of that single file; it is in git history at 53177a7.
 """
 
 from __future__ import annotations

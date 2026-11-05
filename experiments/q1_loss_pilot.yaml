@@ -1,0 +1,10 @@
+# Cheap 2-point version of the above: only the extreme depths, 1 seed.
+# 8 runs. Run this before committing a GPU-week to the full replication.
+name: q1_loss_pilot
+dataset: antmaze-medium-stitch-v0
+seeds: [0]
+agent: [crl]
+depth: [4, 32]
+profile: [ogbench, scaling_crl]      # <- the comparison, as a sweep axis
+tower: residual
+step_cap: 1000000

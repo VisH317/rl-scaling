@@ -1,4 +1,0 @@
-# CRL with the agent file's bare defaults and NO published flags. This is what we
-# ran by mistake on 2026-11-05; kept so the difference can be measured, not assumed.
-defaults: [crl]
-use_published_flags: false

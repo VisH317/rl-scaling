@@ -57,6 +57,7 @@ def reeval_one(run_dir: str, episodes: int, checkpoint: str = "best") -> dict | 
     import agents as og_agents
 
     from offline.datasets import build_datasets
+    from offline.critic_losses import install_critic_loss
     from offline.patches import build_config, install_residual_arch
 
     cfg_p = os.path.join(run_dir, "config.json")
@@ -73,6 +74,7 @@ def reeval_one(run_dir: str, episodes: int, checkpoint: str = "best") -> dict | 
     train_dataset = dataset_class(Dataset.create(**train_raw), og_cfg)
 
     install_residual_arch(run_cfg["arch"])
+    install_critic_loss(run_cfg["agent"])
     ex = train_dataset.sample(1)
     agent = og_agents.agents[agent_name].create(
         run_cfg["seed"], ex["observations"], ex["actions"], og_cfg
@@ -113,7 +115,7 @@ def reeval_one(run_dir: str, episodes: int, checkpoint: str = "best") -> dict | 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--grid", choices=list(C.GRIDS))
+    ap.add_argument("--grid")  # no `choices`: see monitor.py
     ap.add_argument("--run-dir")
     ap.add_argument("--episodes", type=int, default=C.PUBLISHED_EVAL_EPISODES)
     ap.add_argument("--checkpoint", default="best")

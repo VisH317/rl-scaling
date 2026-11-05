@@ -151,6 +151,7 @@ def main() -> int:
     args = ap.parse_args()
 
     from offline import config as C
+    from offline.critic_losses import install_critic_loss
     from offline.patches import agent_param_report, build_config, install_residual_arch
 
     # ---- resolve the run config -------------------------------------------------
@@ -224,6 +225,9 @@ def main() -> int:
         # Process-lifetime patch: Flax re-runs setup() on every apply, so the shim must
         # stay installed for as long as the agent is used, not just while it is built.
         run_cfg["residual_tower_installed"] = install_residual_arch(run_cfg["arch"])
+        # Must happen BEFORE the agent is built, and for the whole process: Flax
+        # re-enters the loss on every apply.
+        run_cfg["critic_loss_patched"] = install_critic_loss(run_cfg["agent"])
         agent = agent_class.create(
             run_cfg["seed"], example["observations"], example["actions"], og_cfg
         )

@@ -54,13 +54,36 @@ step "3. config self-check"
 $PY -m offline.config >/dev/null && echo "config resolves"
 check $?
 
-step "3b. hydra composes every preset, and has not drifted from config.py"
-$PY -m offline.schema
+step "3b. critic losses: infonce / neg_l2 / logsumexp penalty"
+$PY -m offline.critic_losses
 check $?
-for e in phase1_anchor phase1_repro q1_loss_pilot phase3_corner phase3_full smoke adhoc; do
-  $PY src/scripts/launch.py experiment=$e dry_run=true >/dev/null 2>&1 \
-    || { echo "  FAILED to compose experiment=$e"; false; }
+
+step "3c. every experiments/*.yaml resolves, and the committed ones are unchanged"
+for f in "$REPO"/experiments/*.yaml; do
+  case "$(basename "$f")" in TEMPLATE.yaml) continue ;; esac
+  $PY "$REPO/src/run.py" "$f" >/dev/null 2>&1 \
+    || { echo "  FAILED to resolve $(basename "$f")"; false; }
 done
+check $?
+# Regression: the YAMLs must reproduce the run ids already on disk, or a re-run
+# would orphan finished work instead of recognising it.
+$PY - <<'EOF'
+import sys, os, glob
+sys.path.insert(0, "/home/vt7993/rl-scaling/src")
+import run as R
+ok = True
+for name in ("phase1_repro", "phase1_anchor"):
+    f = f"/home/vt7993/rl-scaling/experiments/{name}.yaml"
+    cfg = R.load(f); cfg["_source"] = f
+    want = {r["run_id"] for r in R.resolve_runs(cfg)}
+    have = {os.path.basename(p)[:-5] for p in
+            glob.glob(f"/scratch/gpfs/vt7993/rl-scaling/experiments/configs/{name}__*.json")}
+    if have and want != have:
+        print(f"  {name}: run ids CHANGED"); ok = False
+    else:
+        print(f"  {name}: {len(want)} run ids stable")
+raise SystemExit(0 if ok else 1)
+EOF
 check $?
 
 step "4. mujoco env + EGL rendering"

@@ -1,0 +1,12 @@
+# Control: OGBench's own architecture, unmodified. Targets CRL 53+/-6, GCBC 45+/-11.
+name: phase1_anchor
+dataset: antmaze-medium-stitch-v0
+seeds: [0, 1, 2]
+agent: [crl, gcbc]
+depth: [4]                     # ignored by the ogbench_mlp tower
+profile: ogbench
+tower: ogbench_mlp
+width: 512
+repr_dim: 512
+step_cap: 1000000
+plateau_min_steps: 1000000

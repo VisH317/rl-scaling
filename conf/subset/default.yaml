@@ -1,9 +1,0 @@
-# Nested subsets, SHARD-ALIGNED (decision D5, 2026-11-05).
-# Sizes at or below one shard are a fixed-seed permutation prefix within shard 000;
-# larger sizes take whole shards. Both are nested. This keeps the 1M cell a standard
-# whole dataset (a free check against published numbers) and means 1M/3M/10M need no
-# new files at all.
-sizes: [100000, 300000, 1000000, 3000000, 10000000]
-seed: 0
-keep_sim_state: true   # qpos/qvel: required by probe 3, coverage stats and -oraclerep
-val_shards: [0]        # FIXED across every grid cell -- never scaled with train size

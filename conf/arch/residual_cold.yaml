@@ -1,4 +1,0 @@
-# Residual tower + stable-CRL's 1e-12 cold head init. NOT part of the 1000-layer
-# recipe (the rebuttal tested it as a separate ablation) -- an explicit opt-in.
-defaults: [residual]
-init: cold

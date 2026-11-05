@@ -1,4 +1,0 @@
-# Denser snapshots for probing training dynamics over time.
-defaults: [default]
-periodic_interval: 100000
-keep_periodic: 10

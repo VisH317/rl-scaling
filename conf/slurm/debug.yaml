@@ -1,6 +1,0 @@
-# One GPU, one run, 30 minutes -- for interactive debugging.
-defaults: [stellar]
-gpus_per_job: 1
-runs_per_gpu: 1
-xla_mem_fraction: 0.9
-time_limit: "00:30:00"

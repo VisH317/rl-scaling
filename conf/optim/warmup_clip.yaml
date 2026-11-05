@@ -1,6 +1,0 @@
-# DEVIATES FROM BOTH BASELINES. Only for diagnosing a deep-run instability -- it
-# confounds the depth axis, so never mix these runs into the scaling fit.
-defaults: [adam_constant]
-schedule: linear_warmup_cosine
-warmup_steps: 50000
-max_grad_norm: 1.0

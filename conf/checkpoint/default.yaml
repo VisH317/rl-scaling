@@ -1,8 +1,0 @@
-# OGBench's flax pickle stores params AND Adam state, so a restore resumes exactly.
-# save_best matters: phases 2 (probes) and 5 (frozen critics) need the BEST critic,
-# and OGBench's own main.py saves only periodically and would lose it.
-save_best: true
-save_final: true
-periodic_interval: 500000
-keep_periodic: 2
-heartbeat_interval: 5000

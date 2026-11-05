@@ -113,7 +113,9 @@ def classify(rec: dict, live_jobs: set[str], now: float) -> tuple[str, str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--grid", default="phase1_repro", choices=list(C.GRIDS))
+    # No `choices`: grid names now come from experiments/*.yaml (and may carry a
+    # profile suffix), not from the superseded C.GRIDS registry.
+    ap.add_argument("--grid", default="phase1_repro")
     ap.add_argument("--watch", type=int, metavar="SECONDS")
     ap.add_argument("--plots", action="store_true", help="regenerate figures each pass")
     ap.add_argument("--verbose", action="store_true", help="one line per run")

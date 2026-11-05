@@ -1,0 +1,21 @@
+# Direct replication of the 1000-layer paper's critic, offline on OGBench.
+#
+# `profile: scaling_crl` sets the three Q1 fields together:
+#     critic_loss: infonce   logits: neg_l2   logsumexp_penalty: 0.1
+# plus the paper's repr_dim 64, single critic (no ensemble), and batch 256.
+#
+# The paper's own section 4.6 reports NO offline depth benefit with this recipe.
+# We saw a large one with OGBench's binary_nce + dot. This file is the test of
+# whether the loss form is the difference.
+#
+#     python src/run.py experiments/scaling_crl_replication.yaml --submit
+name: scaling_crl_replication
+dataset: antmaze-medium-stitch-v0
+seeds: [0, 1, 2]
+agent: [crl]
+depth: [4, 8, 16, 32]
+profile: scaling_crl
+tower: residual
+width: 256
+block_size: 4
+step_cap: 2000000

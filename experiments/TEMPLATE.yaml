@@ -1,0 +1,76 @@
+# ============================================================================
+#  One experiment = one file. Copy this, edit, run:
+#
+#      python src/run.py experiments/my_exp.yaml              # show the plan
+#      python src/run.py experiments/my_exp.yaml --submit     # generate + queue
+#      python src/run.py experiments/my_exp.yaml --status     # progress
+#      python src/run.py experiments/my_exp.yaml --figures    # plots + CSVs
+#      python src/run.py experiments/my_exp.yaml --reeval     # 50 eps/task headline
+#
+#  ANY key may be a list -> it becomes a sweep axis. Runs = the full product
+#  of every list, times `seeds`. `python src/run.py <file>` prints the count
+#  and the estimated GPU-hours before anything is queued.
+#
+#  Every key below is optional; omitted keys take the value shown here.
+# ============================================================================
+
+name: my_experiment            # run ids and the figure directory are named from this
+dataset: antmaze-medium-stitch-v0
+seeds: [0, 1, 2]
+data_size: null                # null = the whole dataset; or 100000, 1000000, ...
+
+# ---------------------------------------------------------------- sweep axes
+agent: [crl, gcbc]             # crl | gcbc
+depth: [4, 8, 16, 32]          # dense layers in the residual stack
+
+# ------------------------------------------------------ critic  (OPEN Q1)
+# OGBench ships binary_nce + dot. The 1000-layer paper used infonce + neg_l2
+# + logsumexp_penalty 0.1. These three move TOGETHER -- see `profile` below.
+critic_loss: binary_nce        # binary_nce | infonce
+logits: dot                    # dot | neg_l2
+logsumexp_penalty: 0.0         # paper uses 0.1 with infonce; 0 with binary_nce
+critic_ensemble: 2             # 2 only -- crl.py's actor unpacks `q1, q2`.
+                               # The paper uses 1; a known, recorded deviation.
+repr_dim: 64                   # paper 64 | OGBench 512 | stable-CRL 16   (OPEN Q2)
+
+# ------------------------------------------------------------- architecture
+tower: residual                # residual | plain | ogbench_mlp
+width: 256
+block_size: 4                  # dense layers per residual block
+activation: swish              # swish | gelu
+norm: layer_norm               # layer_norm | none
+init: lecun_uniform            # lecun_uniform | cold   (cold = stable-CRL 1e-12 head)
+
+# -------------------------------------------------------------------- actor
+actor_loss: ddpgbc             # ddpgbc only -- awr needs a value network we don't build
+alpha: null                    # BC coefficient; null = OGBench's published value
+actor_p_trajgoal: null         # null = published value (0.5 on this dataset)
+actor_p_randomgoal: null       # null = published value (0.5 on this dataset)
+use_published_flags: true      # apply OGBench's per-dataset published command
+
+# ------------------------------------------------------------- optimization
+# Only `lr` and `batch_size` take effect. OGBench builds the optimizer itself as
+# a bare optax.adam(lr), so schedule/warmup/clipping/decay reach nothing --
+# run.py HARD-ERRORS rather than let you set a knob that silently does nothing.
+# (This is also fine for the science: warmup and clipping help deep nets
+# *specifically*, so they would confound the depth axis.)
+lr: 3.0e-4
+batch_size: 1024
+schedule: constant             # constant only  (not implemented)
+warmup_steps: 0                # 0 only         (not implemented)
+max_grad_norm: 0.0             # 0 only         (not implemented)
+weight_decay: 0.0              # 0 only         (not implemented)
+
+# ----------------------------------------------------------------- training
+step_cap: 2000000
+plateau_min_steps: 1000000     # never stop before this
+plateau_patience: 5            # evals without improvement
+plateau_window: 3              # moving-average window
+plateau_min_delta: 0.01
+eval_interval: 100000
+eval_episodes: 15              # during training; --reeval rescores best at 50
+
+# -------------------------------------------------------------------- slurm
+gpus_per_job: 2                # stellar-k09g1 (8 GPU) is the only >4 node
+runs_per_gpu: 3
+time_limit: "24:00:00"         # longer requests collide with maintenance windows
