@@ -365,6 +365,52 @@ Reproduce with `src/scripts/goal_distribution.py`.
 
 ---
 
+### 1.11 `antmaze-medium-stitch-v0` geometry, and the angle that predicts GCBC
+
+Regenerate with `python src/scripts/env_geometry.py`. Measured, not read off a paper.
+
+**Environment.** OGBench `MazeEnv`, 8x8 cell grid with a solid border, `maze_unit = 4.0`
+world units per cell, interior coordinates 0-20 on each axis. Observation 29-D with dims
+0-1 the ant's `(x, y)`; action 8-D joint torques in `[-1, 1]`; episode limit 1000 steps;
+success is binary per episode. Cell `(i, j)` sits at world `x = 4(j-1)`, `y = 4(i-1)`.
+
+**What `-stitch` means, measured.** 5,000 trajectories x 201 steps. The shortest
+maze-path distance between a trajectory's **own** first and last state: mean 3.93 cells,
+median 4, p90 4, **max 5**. 97% cover exactly 4 cells. No trajectory in the dataset
+solves any of the five tasks end to end -- every task must be composed from pieces.
+
+**The 5 tasks:**
+
+| task | start | goal | cells | detour | stitches | 1st-move angle |
+|---|---|---|---|---|---|---|
+| 1 | (1,1) | (6,6) | 10 | 1.41 | 2.5 | 45 deg |
+| 2 | (6,1) | (1,6) | 10 | 1.41 | 2.5 | 45 deg |
+| 3 | (5,3) | (4,2) | 6 | **4.24** | 1.5 | **135 deg** |
+| 4 | (6,5) | (6,1) | 10 | 2.50 | 2.5 | **180 deg**, single legal exit |
+| 5 | (2,6) | (1,1) | 8 | 1.57 | 2.0 | 11 deg |
+
+`detour` = maze path / straight-line distance. `stitches` = path cells / median
+trajectory reach. `1st-move angle` = smallest angle between a progress-making first move
+and the straight line to the goal.
+
+**The finding.** GCBC's per-task success is **monotone in the first-move angle** and in
+nothing else: 0.96 (11 deg), 0.94 (45), 0.82 (45), 0.39 (135), **0.00 (180)**. Path
+length does not order it -- tasks 1, 2 and 4 are all 10 cells and span 0.94 to 0.00.
+
+Task 4's start `(6,5)` is a dead end: `(6,4)`, `(5,5)` and `(7,5)` are walls, so the only
+exit is `(6,6)`, directly away from the goal. A goal-conditioned BC policy conditioned on
+a goal 16 units west reproduces westward actions and walks into a wall for 1000 steps; it
+has no mechanism to represent "go east first". CRL with a deep critic reaches 0.80 there.
+
+**Consequences for phase 2:** probes must bin per task and on this angle, not only on
+goal distance. And CRL vs GCBC are **complementary, not ranked** -- CRL is strongest
+exactly where GCBC fails (tasks 3, 4) and weakest on task 1, the long well-aligned route
+-- so a single aggregate success number on this dataset conveys very little.
+
+See [`results_phase1.md`](results_phase1.md) sections 1 and 6.
+
+---
+
 ## 2. Decisions
 
 | # | Decision | Status | Date | Rationale |
