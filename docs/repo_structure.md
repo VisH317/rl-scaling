@@ -18,14 +18,36 @@ was submitted.** `train_pack.sbatch` does `cd "$REPO/src"` and `eval_pack.sbatch
 Right now `2994202` is pending behind ~14 h of training and will execute whatever
 `src/eval.py` and `src/offline/evals/` contain when it starts. So:
 
-> **Freeze `src/eval.py`, `src/offline/evals/**` and `src/offline/{train,networks,
-> patches,critic_losses,datasets}.py` until `2994202` finishes.** Stages 1–2 below are
-> chosen to avoid those paths entirely.
+> **Nothing in `/home/vt7993/rl-scaling` may change until `2994202` finishes.** Not
+> `src/eval.py`, not `src/offline/evals/**`, not `src/offline/{train,networks,patches,
+> critic_losses,datasets}.py`. §0.1 is how the refactor proceeds anyway.
 
 The permanent fix is in Stage 1: **snapshot the code into scratch at submit time** and
 point the sbatch at the snapshot. That also makes a finished run reproducible — today a
 run's `config.json` records its hyperparameters but nothing records the code that read
 them, so a run from last week cannot be re-executed exactly.
+
+### 0.1 Why this work is in a git *worktree*, not a branch
+
+A branch is not isolation here. `git checkout` rewrites the files **in place**, so
+switching `/home/vt7993/rl-scaling` to a refactor branch would hand the queued job the
+refactored code at 08:40 tomorrow — precisely the failure the freeze exists to prevent.
+
+So the work happens in a second checkout at a different path:
+
+```
+/home/vt7993/rl-scaling            main                 <- what the queue executes
+/home/vt7993/rl-scaling-refactor   refactor/structure   <- where the work happens
+```
+
+One repository, two working trees, one `.git`. The main tree is never touched, so the
+freeze is **lifted for the refactor**: every stage below, including the ones that
+rewrite `src/eval.py`, is safe to do right now.
+
+The constraint moves to the merge. **Do not merge `refactor/structure` into `main`
+until `2994202` has finished** — merging is the moment the live tree changes. After
+Stage 1 lands the constraint weakens to "no job submitted before the snapshot existed
+is still queued".
 
 ---
 
@@ -79,48 +101,50 @@ experiment file. **No stage below may be merged with that check failing.**
 
 Two module contracts, and everything else is library code behind them.
 
-### 4.1 An **experiment** is pure configuration
+### 4.1 An **experiment** is one flat, complete file — generated from a template
 
-No code. One YAML, which may inherit:
+*(Revised 2026-11-05 after review. The first draft proposed runtime `base:`
+inheritance; that is rejected, and §6 records why.)*
 
-```yaml
-# experiments/phase1_repro.yaml
-base: [antmaze_stitch, residual_depth_sweep]   # fragments in experiments/_base/
-agent: [crl, gcbc]
-profile: ogbench
+An experiment file stays exactly what it is today: **every key present, in one file you
+can read top to bottom**, with no indirection to chase. Reuse happens at the moment the
+file is **created**, not every time it is read.
+
+```bash
+src/run.py --new humanoid_ensemble2 --template depth_sweep \
+           --set dataset=humanoidmaze-medium-navigate-v0 --set critic_ensemble=1
+# -> writes experiments/humanoid_ensemble2.yaml: flat, complete, every key commented
 ```
 
-```yaml
-# experiments/_base/antmaze_stitch.yaml     the dataset and its schedule
-dataset: antmaze-medium-stitch-v0
-seeds: [0, 1, 2]
-step_cap: 2_000_000
-plateau_min_steps: 1_000_000
-eval_interval: 100_000
-eval_episodes: 15
-
-# experiments/_base/residual_depth_sweep.yaml   the architecture axis
-tower: residual
-width: 256
-block_size: 4
-repr_dim: 64
-depth: [4, 8, 16, 32]
+```
+experiments/
+  _templates/
+    depth_sweep.yaml        the common shape: a depth axis over one dataset
+    loss_comparison.yaml    extends: depth_sweep, sweeps `profile` instead
+    single_point.yaml       one cell, for a pilot
+  phase1_repro.yaml         flat. Reads top to bottom. No `base:` key.
+  humanoid_ensemble1.yaml   flat.
 ```
 
-`humanoid_ensemble1` then becomes the four lines that are actually its experiment:
+**Templates may extend templates** — `extends:` inside `_templates/` only — and that
+chain is resolved **at generation time**. What lands in `experiments/` is always fully
+expanded. Three consequences worth being explicit about:
 
-```yaml
-base: [humanoidmaze_medium, residual_depth_sweep]
-agent: [crl]
-seeds: [0, 1]
-critic_ensemble: 1          # the one deliberate change
-```
+- *You see every knob for an experiment in its own file.* That is the requirement, and
+  it is what runtime inheritance would have taken away.
+- *The file on disk is exactly what runs*, so run-id stability is obvious rather than
+  argued — there is no resolution step between the file and the hash.
+- *Editing a template cannot silently change an old experiment.* For a research repo
+  that is a feature: a finished run's config means what it meant when it ran.
 
-**Merge rule, stated once and tested:** shallow merge; later `base` beats earlier; the
-file's own keys beat every base. **Lists are replaced, never merged** — a list is a
-sweep axis, and silently concatenating two axes would multiply the grid without
-anyone asking for it. The resolved config is already written to
-`configs/_<name>.resolved.yaml`, so provenance survives.
+The cost is real and I am not going to hide it: **a new default has to be applied to
+each existing experiment**, not inherited. `--regenerate <name>` re-emits a file from
+its template while preserving the keys that differ from the template's values (recorded
+in a `# generated-from:` header), so this is one command per file rather than a hand
+edit — but it is still N files, and the run-id test is what proves each one is faithful.
+
+The comments in a generated file are **not hand-written**. They come from the schema
+(§4.4), which is why the `critic_ensemble` comment in D9 could not go stale again.
 
 ### 4.2 An **eval** is a self-contained directory
 
@@ -140,7 +164,9 @@ Reuse the dead `src/rl_scaling/` name rather than inventing another:
 src/rl_scaling/
     bootstrap.py    the interpreter guard + sys.path, imported first by every CLI   [D2,D3]
     paths.py        every path, derived from two env vars. Nothing else holds one.  [D4]
-    yamlconf.py     load + `base:` inheritance + unknown-key error + UNIMPLEMENTED  [D8,D9]
+    schema.py       the ONE definition of every config key: default, doc,
+                    choices, sweepable, unimplemented. Everything else is
+                    derived from it -- templates, docs, validation.        [D8,D9]
     pipeline.py     load -> resolve -> plan -> write -> submit -> status -> report  [D1]
     slurm.py        submission, squeue parsing, the shared sbatch prelude           [D4,D6]
     checkpoints.py  THE agent loader; reeval and the evals both call it             [D5]
@@ -155,12 +181,63 @@ src/eval.py         thin CLI over pipeline, subject = evals
 resolve a config into units of work, how to print them, which sbatch to submit. That is
 the only real difference between them today.
 
+### 4.4 Observability: knowing what exists without reading the code
+
+A standing requirement, not a one-off: **it should be possible to see what the repo can
+do, and what belongs in a config file, without opening a `.py`.** Today that is false —
+the answer to "what keys does an experiment take?" lives in `run.py:DEFAULTS` and is
+*transcribed* by hand into `TEMPLATE.yaml` and `experiments/README.md`, which is exactly
+how D9 happened.
+
+The fix is one source and generated views of it.
+
+**The source.** `rl_scaling/schema.py` holds one record per config key:
+
+```python
+Key("critic_ensemble", default=2, group="agent", sweepable=True,
+    doc="Critic ensemble members. OGBench uses 2 (q1/q2 for the actor's min); "
+        "scaling-crl uses 1. Implemented in offline/critic_losses.py.",
+    choices=(1, 2))
+```
+
+`DEFAULTS`, `SWEEPABLE` and `UNIMPLEMENTED` are **derived** from it, so `run.py` keeps
+behaving identically while nothing is stated twice.
+
+**The generated views**, all under `docs/reference/`, all rebuilt by `src/check.py
+--write` and **drift-tested** (the check fails if a committed file differs from what
+regenerating would produce):
+
+| file | generated from | answers |
+|---|---|---|
+| `config_keys.md` | `schema.py` | every experiment key: default, choices, what it does, whether it is a sweep axis, whether anything reads it |
+| `evals.md` | each `eval.yaml` + its README's first paragraph | every eval: status, what it measures, which agents it applies to, its params and defaults, its outputs |
+| `experiments.md` | `experiments/*.yaml` resolved | every experiment: run count, grid, cost estimate, current status |
+| `cli.md` | the argparse parsers | every command and flag across `run.py`, `eval.py` and `scripts/` |
+| `outputs.md` | `impl.py` writers | what every artefact file contains, field by field |
+
+**The skill.** `.claude/skills/rl-scaling/SKILL.md` is the entry point for a Claude Code
+session in this repo and for a human reading over its shoulder. It states:
+
+- where the generated reference lives and that it is generated (never hand-edit);
+- the two module contracts from §4.1 and §4.2, as checklists;
+- **what to put in a config file** — which keys are required, which are sweep axes,
+  which are deliberately refused and why;
+- the non-negotiables: run ids are config hashes; a knob nothing reads is a hard error;
+  an eval must ship a self-check that runs without a GPU;
+- the operational rules from §0 — the live tree is what the queue executes, so check
+  the queue before editing it;
+- what to regenerate and re-run after a change (`src/check.py`).
+
+A skill is the right shape for this because it loads *before* the work, which is where
+instructions change the outcome. A README is read after someone has already guessed.
+
 ---
 
 ## 5. Stages
 
-Ordered so that each is independently useful, independently revertible, and so the
-risky ones come after the queue drains. Sizes are rough.
+Ordered so that each is independently useful and independently revertible. Because the
+work is in a worktree (§0.1) none of them has to wait for the queue — the ordering is
+about dependency and proof, not about the scheduler. Sizes are rough.
 
 ### Stage 0 — guardrails (do first, blocks everything) · ~80 ln · no risk
 
@@ -172,8 +249,6 @@ risky ones come after the queue drains. Sizes are rough.
 
 ### Stage 1 — delete copy-paste with no design content · ~200 ln net **deletion** · low risk
 
-Touches no file the queued jobs execute.
-
 1. `rl_scaling/bootstrap.py` — the guard and path setup, once. The 5 copies become `import rl_scaling.bootstrap`. [D2, D3]
 2. `rl_scaling/paths.py` — move the path block out of `config.py`; `slurm/_prelude.sh` sourced by all four sbatch files, exporting `REPO`, `PY`, `EXP`, the GL and XLA vars and the log directory. **19 hardcoded paths → 2 env vars.** [D4]
 3. Fix `pyproject.toml` (`requires-python = ">=3.11"`, real dependencies from `requirements.txt`) and delete `src/rl_scaling/__init__.py`'s Hello World. [D10]
@@ -181,18 +256,24 @@ Touches no file the queued jobs execute.
 
 *Verifies:* Stage 0 passes; `sbatch --test-only` on each script; one real 1-task eval job against the snapshot.
 
-### Stage 2 — config inheritance and a generated template · ~250 ln · low risk, high payoff
+### Stage 2 — the schema as the single source · ~350 ln · low risk, high payoff
 
-This is the stage that answers the original question.
+This is the stage that makes §4.4 true, and it subsumes the template work.
 
-1. `yamlconf.py` with `base:` resolution and the merge rule from §4.1.
-2. Rewrite the five existing experiment files as `base:` + deltas. **The run-id test must stay green — that is the whole proof the rewrite was faithful.**
-3. **Generate `TEMPLATE.yaml` from `DEFAULTS` + `UNIMPLEMENTED` + docstrings** (`src/run.py --template`), and make Stage 0 fail if the committed file differs. This structurally kills D9: the `critic_ensemble` comment could not have gone stale, because nobody would have written it by hand.
-4. Same mechanism for `evals/suites/`.
+1. `rl_scaling/schema.py`: one `Key` per config key. `DEFAULTS` / `SWEEPABLE` /
+   `UNIMPLEMENTED` become derived views. **Values must be byte-identical — the run-id
+   test is the proof.**
+2. `src/run.py --new <name> --template <t> [--set k=v]` writes a flat, complete,
+   commented experiment file. `experiments/_templates/` with `extends:` resolved **at
+   generation time**, so nothing in `experiments/` has a `base:` key.
+3. `--regenerate <name>` re-emits from the template, preserving keys that differ.
+4. `TEMPLATE.yaml` and `docs/reference/config_keys.md` are generated; Stage 0's check
+   fails on drift. **D9 becomes structurally impossible.**
 
-*Verifies:* run ids unchanged for all five experiments; `--template` output == committed file.
+*Verifies:* run ids unchanged for all five experiments; regenerating each committed
+experiment is a no-op diff; `--template` output == committed file.
 
-### Stage 3 — one lifecycle · ~400 ln moved, ~250 deleted · medium risk · **after `2994202`**
+### Stage 3 — one lifecycle · ~400 ln moved, ~250 deleted · medium risk
 
 Extract `pipeline.py`; `run.py` and `eval.py` become subject definitions. Fold
 `--report` (currently eval-only) into the pipeline so experiments get the same
@@ -208,17 +289,30 @@ as golden files in Stage 0.
 2. `monitor.py` becomes `dashboard.py --grid` — one `squeue` parser. [D6]
 3. Split `config.py`: `registry.py` (datasets, published flags, subset plans) keeps the verified values; the superseded config classes move to `docs/source_comparison.md`, where the three-codebase comparison tables are genuinely valuable as **prose** and actively confusing as **code**. [D7]
 
-### Stage 5 — docs index · ~100 ln · no risk
+### Stage 5 — generated reference + docs index · ~300 ln · no risk
 
-Root `README.md`: what this is, the three commands, and a table pointing at the 3,336
-lines that already exist (`offline_exp.md` = the brief, `algorithm.md` = what runs,
-`research_log.md` = verified facts, `results_phase1.md` = findings, `evals/README.md`
-= the eval architecture). [D11]
+The five generated files in §4.4, plus a root `README.md` that is an index: what this
+is, the three commands, and a table pointing at the 3,336 lines of prose that already
+exist (`offline_exp.md` = the brief, `algorithm.md` = what runs, `research_log.md` =
+verified facts, `results_phase1.md` = findings, `evals/README.md` = the eval
+architecture, `docs/reference/` = generated). [D11]
+
+### Stage 6 — the Claude skill · ~150 ln · no risk
+
+`.claude/skills/rl-scaling/SKILL.md` per §4.4. Written last on purpose: it documents
+the contracts the earlier stages establish, and a skill that describes a structure
+that does not exist yet is the same drift problem in a new place.
 
 ---
 
 ## 6. Deliberately not proposed
 
+- **Runtime config inheritance (`base:` in an experiment file).** This was in the first
+  draft and is rejected. Seeing every knob for an experiment in one file, read top to
+  bottom, is worth more than not repeating `tower: residual` five times — the knobs are
+  the experiment, and an inherited one is a knob you did not know you had. Reuse moves
+  to generation time (§4.1), which keeps the DRY benefit where it costs nothing and
+  additionally makes a finished run's config immune to later template edits.
 - **A plugin registry / entry-point system for evals.** Directory discovery already works and is one function. Entry points would add packaging ceremony for zero reach.
 - **A config schema library (pydantic/attrs).** `run.py`'s hand-written unknown-key + `UNIMPLEMENTED` checks produce better error messages than a validator would, because they say *why* a knob is refused. Keep them.
 - **Merging `experiments/` and `evals/` into one config system.** They answer different questions (what to run vs what to measure), have different lifecycles, and one of them carries code. Symmetry here would be cosmetic.
@@ -229,10 +323,19 @@ lines that already exist (`offline_exp.md` = the brief, `algorithm.md` = what ru
 
 ## 7. Decisions needed
 
-1. **Stage ordering.** Stage 2 is the one that was actually asked for. Stage 1 is a prerequisite only for the code-snapshot fix, not for inheritance — so **2-before-1** is available if the inheritance payoff is wanted sooner.
-2. **`experiments/_base/` naming.** `_base/` keeps fragments visually separate from runnable experiments and sorts first. Alternatives: `experiments/base/`, or a top-level `base.yaml` with named sections.
-3. **Does `results_phase1.md` become an AUTO-block document** (Stage 3)? It would stop the numbers drifting, at the cost of a one-time rewrite of a 651-line file that currently reads well.
-4. **Is the code snapshot worth the scratch space?** `src/` is ~8k lines, so a few hundred KB per job — negligible, but it does mean a run's code and the repo's code can diverge, which is the point and also a thing to remember when debugging.
+1. **Merge timing.** The branch cannot land while `2994202` is queued (§0.1). Merge
+   right after it finishes, or hold until Stage 1's snapshot makes merge timing
+   irrelevant?
+2. **`--regenerate` semantics.** When a template changes, should regenerating an
+   experiment preserve *every* key that differs from the template, or only keys listed
+   in its `# generated-from:` header? The first is safer, the second is tidier.
+3. **Does `results_phase1.md` become an AUTO-block document** (Stage 3)? It would stop
+   the numbers drifting, at the cost of a one-time rewrite of a 651-line file that
+   currently reads well.
+4. **How much does `docs/reference/` duplicate the skill?** Current split: the
+   reference is exhaustive and generated, the skill is short, opinionated and
+   hand-written, and points at the reference. If the skill starts restating key
+   defaults it has become a third copy.
 
 ---
 
@@ -247,6 +350,7 @@ If all five stages land:
 | hardcoded absolute paths outside the path module | 23 | 0 |
 | agent loaders | 2 | 1 |
 | `squeue` parsers | 2 | 1 |
-| lines in a new experiment's YAML | 10–15 | 3–5 |
+| writing a new experiment | copy the nearest file, edit, hope | `--new --template --set`, flat output |
 | hand-maintained schema docs | 2 (both stale) | 0 (generated, drift-tested) |
-| CPU-only test entry point | none | `make check`, <15 s |
+| CPU-only test entry point | none | `src/check.py`, <15 s |
+| "what can this repo do?" answered without reading code | no | `docs/reference/` (5 generated files) + the skill |
