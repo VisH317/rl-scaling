@@ -1,0 +1,13 @@
+# @package _global_
+# The full grid. ~150 runs; at 12 concurrent this is days of wall clock. Size it
+# against the depth-64 timing from the smoke test before launching.
+defaults:
+  - override /dataset: cube_double_play_100m
+  - override /arch: residual
+experiment:
+  name: phase3_full
+  depths: [4, 8, 16, 32, 64]
+  sizes: [100000, 300000, 1000000, 3000000, 10000000]
+  agents: [crl, gcbc]
+  seeds: [0, 1, 2]
+  note: 25 cells x 2 algorithms x 3 seeds = 150 runs.

@@ -266,3 +266,49 @@ task: cube-double-play is **10.1%** (1001-step trajectories), 4× lower. Logged 
 with the probe consequence: bin "goal == final state" separately, or it silently
 dominates the far-distance bins that H-horizon is about.
 
+### I15 — Hydra configuration layer · 2026-11-05
+
+Added `hydra-core==1.3.8`. Hydra sits **above** the existing interface, not in place of
+it: `launch.py` composes a config and resolves it into exactly the per-run JSON that
+`train.py --run-config` already consumes. Jobs already in the Slurm queue read configs
+written before this change and are unaffected — verified by composing a preset and
+feeding the result through the unmodified `train.py` end-to-end (400 steps, 5-task eval,
+both checkpoints, `last3_eval_mean` populated).
+
+Layout: `conf/` with 10 groups and 38 YAML files (`paths`, `dataset`, `arch`, `agent`,
+`optim`, `train`, `eval`, `checkpoint`, `slurm`, `subset`, `experiment`), plus
+`conf/README.md`. Schema in `src/offline/schema.py` as Hydra structured configs, so
+typos and wrong types fail at composition rather than at train time.
+
+**Drift guard.** `config.py` stays the authoritative annotated record (each value cites
+its source); `schema.py` restates the defaults in OmegaConf-friendly types.
+`test_schema_matches_config()` asserts they agree on every shared field, and runs on
+every `launch.py` invocation plus as smoke check 3b. Currently clean.
+
+**Two real bugs found while testing the layer:**
+
+1. **Precedence inversion.** Published per-`(dataset, agent)` flags were applied *after*
+   the recipe, so `agent=crl_stable` came out with `alpha=0.1` (the published BC
+   coefficient for antmaze-medium-stitch) instead of stable-CRL's `0.05` — a run that
+   was neither recipe. Order is now: group defaults → published flags → recipe deltas,
+   with the stable deltas held in code (`STABLE_AGENT_DELTAS`) so they can be re-applied
+   last. The launcher prints the conflict when it fires.
+2. **Misleading summary.** The printed summary read `cfg.arch`, but a recipe mutates the
+   per-run arch after composition, so `crl_stable` displayed `repr_dim=64 init=lecun_uniform`
+   while the runs actually got `16 / cold`. The summary now prints the resolved run
+   config. A config display that disagrees with what runs is worse than no display.
+
+Also: Hydra rejected the composition at first ("paths appears more than once in the
+final defaults list") because both `RootConf` and `config.yaml` declared a defaults
+list. The YAML owns it now.
+
+Guard rails in the launcher: a loud warning when the optimizer departs from plain
+constant-LR Adam (warmup and clipping help deep nets *specifically*, so they confound
+the depth axis); a warning when `use_published_flags=false`; and a note when
+`arch.depth=N` is shadowed by an experiment's `depths` sweep. Each generation also
+writes `_composed_<experiment>.yaml`, the fully resolved config, beside the run configs.
+
+All 8 presets compose: anchor 6 runs, repro 24, q1 pilot 2, corner 54, full 150,
+smoke 2, adhoc 1, actor_thread 30 (declared but not yet runnable — frozen-critic
+loading is unimplemented).
+

@@ -1,0 +1,10 @@
+# @package _global_
+# A single run from whatever the current groups resolve to. Use for one-offs:
+#   python src/scripts/launch.py experiment=adhoc arch.depth=64 agent=crl_stable
+experiment:
+  name: adhoc
+  depths: []
+  sizes: []
+  agents: []
+  seeds: [0]
+  note: Single run from the composed config.

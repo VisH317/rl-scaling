@@ -1,0 +1,5 @@
+# The non-residual control: identical norm/activation placement, no skip connections,
+# so residual connections are the ONLY difference. This is the "standard architecture"
+# that collapsed with depth in the 1000-layer rebuttal.
+defaults: [residual]
+tower: mlp

@@ -1,0 +1,18 @@
+# @package _global_
+# THE REPRODUCTION GATE. Stock OGBench architecture, published flags, 1M steps.
+# If this misses its targets, the depth sweep is uninterpretable no matter what it shows.
+defaults:
+  - override /dataset: antmaze_medium_stitch
+  - override /arch: ogbench_stock
+  - override /train: anchor_1m
+experiment:
+  name: phase1_anchor
+  depths: [4]            # ignored by the ogbench_mlp tower
+  sizes: []
+  agents: [crl, gcbc]
+  seeds: [0, 1, 2]
+  note: >-
+    Stock OGBench 3x512 GELU MLP, latent_dim 512, published flags, 1M steps. 6 runs.
+  targets: >-
+    OGBench paper, antmaze-medium-stitch: CRL 53+/-6, GCBC 45+/-11, scored as the mean
+    of the last 3 evaluations (and re-scored at 50 episodes/task via reeval.py).

@@ -1,0 +1,3 @@
+# Use ONLY once `sinfo -p gpu` shows stellar-k09g1 (8x A100) back in service.
+defaults: [stellar]
+gpus_per_job: 4

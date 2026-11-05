@@ -1,0 +1,18 @@
+# Training length is the brief's key protocol decision. Horizon Reduction used a FIXED
+# 5M steps at every dataset size, so larger datasets got fewer passes per sample, which
+# can manufacture a data plateau. Here the cap GROWS with dataset size and runs stop on
+# an evaluation plateau -- but never before plateau_min_steps.
+step_caps:
+  100000: 500000
+  300000: 1000000
+  1000000: 2000000
+  3000000: 3000000
+  10000000: 5000000
+fixed_step_cap: null
+log_interval: 10000
+eval_interval: 100000
+plateau_patience: 5
+plateau_min_delta: 0.01
+plateau_window: 3        # moving average: one 75-episode eval is noisy enough to lie
+plateau_min_steps: 1000000   # OGBench publishes 1M-step runs; earlier isn't comparable
+seeds: [0, 1, 2]

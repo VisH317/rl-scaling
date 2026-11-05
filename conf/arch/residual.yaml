@@ -1,0 +1,12 @@
+# The 1000-layer paper's tower: stem -> (depth/4) residual blocks -> linear head.
+# Block = 4 x (Dense -> LayerNorm -> Swish), then + identity. Pre-activation norm.
+# `depth` counts dense layers in the residual stack only; must divide by block_size.
+depth: 4
+width: 256
+repr_dim: 64          # scaling-crl 64 | OGBench 512 | stable-CRL 16  (open question Q2)
+block_size: 4
+norm: layer_norm
+activation: swish
+init: lecun_uniform   # scaling-crl uses this EVERYWHERE, including the head
+tower: residual
+ogbench_hidden_dims: [512, 512, 512]

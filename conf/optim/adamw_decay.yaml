@@ -1,0 +1,4 @@
+# DEVIATES FROM BOTH BASELINES. Regularization probe for the overfitting story (H-data).
+defaults: [adam_constant]
+optimizer: adamw
+weight_decay: 1.0e-4

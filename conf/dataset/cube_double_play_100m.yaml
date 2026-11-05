@@ -1,0 +1,13 @@
+# Sharded: 100 x (1M-transition npz + its own -val sibling). Shards 000-009 on disk.
+# 1,001,000 rows = 1,000 trajs x 1001 states -> 1,000,000 transitions per shard.
+name: cube-double-play-100m-v0
+env_name: cube-double-play-v0
+traj_len: 1001
+n_train_trajs: 1000
+n_val_trajs: 100
+ob_dim: 37
+act_dim: 5
+n_shards: 100
+train_bytes: 297000000
+val_bytes: 30000000
+size: 1000000

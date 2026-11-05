@@ -1,0 +1,35 @@
+# Root config. Compose groups on the CLI; override any leaf with dotted paths.
+#
+#   python src/scripts/launch.py                                  # defaults
+#   python src/scripts/launch.py experiment=phase1_anchor
+#   python src/scripts/launch.py arch.depth=64 optim.lr=1e-4
+#   python src/scripts/launch.py agent=crl_infonce arch=plain_mlp
+#   python src/scripts/launch.py experiment=phase3_corner dataset=cube_double_play_100m
+#
+# Nothing is submitted unless you say so:  submit=chain   (or submit=cap)
+defaults:
+  - base_config            # structured schema in src/offline/schema.py (type-checked)
+  - paths: default
+  - dataset: antmaze_medium_stitch
+  - arch: residual
+  - agent: crl
+  - optim: adam_constant
+  - train: default
+  - eval: default
+  - checkpoint: default
+  - slurm: stellar
+  - subset: default
+  - experiment: phase1_repro
+  - _self_
+
+dry_run: false
+submit: none       # none | chain | cap
+after: null        # sbatch dependency gate, e.g. a smoke-test job id
+
+hydra:
+  run:
+    dir: ${paths.experiments_dir}/hydra/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: ${paths.experiments_dir}/hydra/multirun/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: false

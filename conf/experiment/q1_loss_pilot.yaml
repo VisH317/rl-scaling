@@ -1,0 +1,16 @@
+# @package _global_
+# Open question Q1, the cheapest way to settle it: does the critic loss form change
+# the depth verdict? The 1000-layer depth result used InfoNCE + neg-L2 + logsumexp;
+# both offline codebases use binary NCE + dot. Run BOTH at a shallow and a deep point.
+#   python src/scripts/launch.py experiment=q1_loss_pilot agent=crl           # binary NCE
+#   python src/scripts/launch.py experiment=q1_loss_pilot agent=crl_infonce   # InfoNCE
+defaults:
+  - override /dataset: antmaze_medium_stitch
+  - override /arch: residual
+experiment:
+  name: q1_loss_pilot
+  depths: [4, 32]
+  sizes: []
+  agents: [crl]
+  seeds: [0]
+  note: 2 runs per loss variant. Run once with agent=crl and once with agent=crl_infonce.

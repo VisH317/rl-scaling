@@ -1,0 +1,10 @@
+# OGBench protocol: 5 goals per task, task_id 1..5.
+# 15 episodes keeps the curves cheap (75 per eval point); the HEADLINE number comes
+# from re-scoring params_best.pkl at published_episodes via src/scripts/reeval.py.
+episodes: 15
+published_episodes: 50
+temperature: 0.0
+gaussian: null
+video_episodes: 0     # EGL does work on the GPU nodes; state-based eval needs no render
+video_frame_skip: 3
+n_tasks: 5

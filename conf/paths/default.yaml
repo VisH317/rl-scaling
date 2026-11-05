@@ -1,0 +1,12 @@
+# Data must NOT live under $HOME: the Stellar home quota is 93 GB.
+scratch_root: /scratch/gpfs/vt7993
+data_dir: ${paths.scratch_root}/ogbench/data
+subset_dir: ${paths.scratch_root}/ogbench/subsets
+experiments_dir: ${paths.scratch_root}/rl-scaling/experiments
+runs_dir: ${paths.experiments_dir}/runs
+configs_dir: ${paths.experiments_dir}/configs
+analysis_dir: ${paths.experiments_dir}/analysis
+slurm_dir: ${paths.experiments_dir}/slurm
+manifest: ${paths.experiments_dir}/run_manifest.json
+venv_python: ${paths.scratch_root}/rl-scaling/venv/bin/python
+repo: /home/vt7993/rl-scaling

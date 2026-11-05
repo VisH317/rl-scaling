@@ -1,0 +1,8 @@
+# The loss the 1000-layer DEPTH RESULT was actually obtained with:
+# InfoNCE over negative-L2 logits plus a logsumexp penalty (scaling-crl/train.py).
+# Neither offline codebase does any of the three. This is open question Q1 -- if the
+# depth test runs under binary NCE instead, a null result is not attributable.
+defaults: [crl]
+critic_loss: infonce
+logits: neg_l2
+logsumexp_penalty: 0.1

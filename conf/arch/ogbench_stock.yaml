@@ -1,0 +1,11 @@
+# OGBench's own MLP, untouched: 3x512, GELU, POST-activation LayerNorm, latent_dim 512.
+# Used by the anchor grid so a missed target can only be data/flags, never our networks.
+depth: 4              # ignored by the ogbench_mlp tower
+width: 512
+repr_dim: 512
+block_size: 4
+norm: layer_norm
+activation: gelu
+init: lecun_uniform
+tower: ogbench_mlp
+ogbench_hidden_dims: [512, 512, 512]

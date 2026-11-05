@@ -1,0 +1,14 @@
+# @package _global_
+# Phase 1b: the offline negative result -- the real baseline.
+# EXPECTED: CRL roughly flat across depth, GCBC rising (rebuttal 0.47 -> 0.63, d2 -> d32).
+# If CRL DOES scale here, stop and report: that alone changes the project.
+defaults:
+  - override /dataset: antmaze_medium_stitch
+  - override /arch: residual
+experiment:
+  name: phase1_repro
+  depths: [4, 8, 16, 32]   # depth 2 is not expressible with 4-layer blocks
+  sizes: []
+  agents: [crl, gcbc]
+  seeds: [0, 1, 2]
+  note: 24 runs. The 1000-layer residual tower vs depth, CRL against its GCBC control.

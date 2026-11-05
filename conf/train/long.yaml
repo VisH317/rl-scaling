@@ -1,0 +1,8 @@
+# Double every cap, for cells still improving when they hit the ceiling.
+defaults: [default]
+step_caps:
+  100000: 1000000
+  300000: 2000000
+  1000000: 4000000
+  3000000: 6000000
+  10000000: 10000000

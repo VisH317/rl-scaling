@@ -1,0 +1,8 @@
+# Stable-CRL's deltas (Zheng et al. 2023), verified from its source:
+#   representation_dim 16, batch_size 2048, bc_coef 0.05, init_w 1e-12.
+# The loss form is ALREADY stable-CRL's in OGBench (binary NCE), so only these change.
+# Set arch=residual_cold alongside this for the cold head init.
+defaults: [crl]
+recipe: stable
+batch_size: 2048
+alpha: 0.05

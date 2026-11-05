@@ -1,0 +1,8 @@
+# Tiny end-to-end validation: minutes, not hours.
+defaults: [default]
+fixed_step_cap: 400
+log_interval: 100
+eval_interval: 200
+plateau_patience: 1000000
+plateau_min_steps: 0
+seeds: [0]

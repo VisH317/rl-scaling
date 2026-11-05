@@ -54,6 +54,15 @@ step "3. config self-check"
 $PY -m offline.config >/dev/null && echo "config resolves"
 check $?
 
+step "3b. hydra composes every preset, and has not drifted from config.py"
+$PY -m offline.schema
+check $?
+for e in phase1_anchor phase1_repro q1_loss_pilot phase3_corner phase3_full smoke adhoc; do
+  $PY src/scripts/launch.py experiment=$e dry_run=true >/dev/null 2>&1 \
+    || { echo "  FAILED to compose experiment=$e"; false; }
+done
+check $?
+
 step "4. mujoco env + EGL rendering"
 $PY - <<'EOF'
 import numpy as np, ogbench
