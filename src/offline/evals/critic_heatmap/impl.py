@@ -147,6 +147,23 @@ def run(task: dict) -> dict:
     Hf, Wf = geo.fine.shape
     rng = np.random.default_rng(int(p.get("seed", 0)))
 
+    # A top-down render of the ACTUAL maze, plus the measured world -> pixel map, so
+    # the figures can lay the field on the environment instead of a schematic of it.
+    # Done before the expensive part: a GL failure should surface in seconds.
+    render_meta, render_err = None, None
+    if p.get("render_maze", True):
+        r, render_err = common.render_top_down(env, geo)
+        if r is not None:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.image as mpimg
+            mpimg.imsave(os.path.join(out_dir, "maze_render.png"), r["image"])
+            render_meta = {k: v for k, v in r.items() if k != "image"}
+            print(f"  rendered maze: fit rms {r['fit_rms_px']} px, "
+                  f"leave-one-out max {r['loo_max_px']} px")
+        else:
+            print(f"  no maze render ({render_err}); figures fall back to the schematic")
+
     st = common.load_states(run_cfg, p.get("state_source", "val"))
     obs_all, act_all = st["observations"], st["actions"]
     valid = st["valids"] > 0.5                   # the last row of a traj has no action
@@ -284,6 +301,7 @@ def run(task: dict) -> dict:
         goal_samples=n_goal, goal_xy_draws=goal_xys,
         add_noise_to_goal=geo.add_noise_to_goal, goal_tol=geo.goal_tol,
         action_sources=sources, min_states_per_bin=min_states,
+        render=render_meta, render_error=render_err,
         free_bins=int(np.isfinite(geodesic[0]).sum()),
         bins_with_data=int((count > 0).sum()),
         bins_usable=int((count >= min_states).sum()),

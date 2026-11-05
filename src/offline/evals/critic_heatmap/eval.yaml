@@ -23,6 +23,10 @@ params:
   goal_samples: 8            # goal observations drawn per task (the goal is a
                              # distribution: pose varies, xy varies by +/- unit/4)
   action_sources: [policy, dataset]   # add `random` for a floor; costs one more sweep
+  # --- presentation ---------------------------------------------------------
+  render_maze: true          # top-down MuJoCo render + a MEASURED world->pixel map,
+                             # so the field is drawn on the actual maze. Falls back
+                             # to the schematic if no GL backend is available.
   # --- bookkeeping ----------------------------------------------------------
   max_batch: 4096
   seed: 0

@@ -39,6 +39,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt                      # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.patches import Rectangle              # noqa: E402
+from matplotlib.transforms import Affine2D            # noqa: E402
 
 import plot_results as P                              # noqa: E402  (one palette source)
 
@@ -71,14 +72,41 @@ def load(suite_dir: str, eval_name: str = "critic_heatmap") -> list:
 
 
 def _panel(ax, field, geodesic, count, meta, task, *, cmap, vmin, vmax,
-           interpolate=False, show_path=True):
-    """One maze panel. Walls are drawn, masked bins are hatched, neither is data."""
+           interpolate=False, show_path=True, render=None):
+    """One maze panel.
+
+    Two backgrounds are possible and the geometry is identical in both, because every
+    artist is drawn in WORLD coordinates and one transform places them:
+
+      render=None   a schematic rebuilt from `maze_map` -- walls as rectangles.
+      render=dict   the actual top-down MuJoCo frame, with the measured world->pixel
+                    affine from `common.render_top_down` as that transform. Walls are
+                    then not drawn: they are in the photograph.
+    """
     unit, sub = meta["unit"], meta["subdiv"]
     maze = np.asarray(meta["_maze"])
     H, W = maze.shape
     ox = oy = unit  # OGBench: offset_x == offset_y == unit
     ext = [-(ox + unit / 2), W * unit - ox - unit / 2,
            -(oy + unit / 2), H * unit - oy - unit / 2]
+
+    if render is not None:
+        a = render["affine"]
+        tr = Affine2D(np.array([[a[0][0], a[0][1], a[0][2]],
+                                [a[1][0], a[1][1], a[1][2]],
+                                [0.0, 0.0, 1.0]])) + ax.transData
+        # The photograph is CONTEXT, not data, so it must recede: desaturate it and
+        # lift it toward the surface, leaving the maze as a pale engraving under a
+        # field that keeps the full sequential ramp.
+        img = np.asarray(render["image"], dtype=np.float64)
+        if img.max() > 1.5:
+            img = img / 255.0
+        g = img[..., :3] @ np.array([0.2126, 0.7152, 0.0722])
+        g = 1.0 - (1.0 - g) * 0.30
+        ax.imshow(g, cmap="gray", vmin=0.0, vmax=1.0, zorder=0,
+                  interpolation="bilinear")
+    else:
+        tr = ax.transData
 
     free = np.isfinite(geodesic)
     usable = free & (count >= meta["min_states_per_bin"]) & np.isfinite(field)
@@ -93,15 +121,17 @@ def _panel(ax, field, geodesic, count, meta, task, *, cmap, vmin, vmax,
     for bi, bj in masked[:600]:
         ax.add_patch(Rectangle((bj * bs - ox - unit / 2, bi * bs - oy - unit / 2),
                                bs, bs, facecolor=NODATA, edgecolor=P.MUTED, lw=0.0,
-                               hatch="///", zorder=1))
+                               hatch="///", zorder=1, alpha=0.9, transform=tr))
     im = ax.imshow(shown, origin="lower", extent=ext, cmap=cmap, vmin=vmin, vmax=vmax,
-                   interpolation="bilinear" if interpolate else "nearest", zorder=2)
-    for i in range(H):
-        for j in range(W):
-            if maze[i, j]:
-                ax.add_patch(Rectangle(
-                    (j * unit - ox - unit / 2, i * unit - oy - unit / 2), unit, unit,
-                    facecolor=WALL, edgecolor="none", zorder=3))
+                   interpolation="bilinear" if interpolate else "nearest", zorder=2,
+                   alpha=0.88 if render is not None else 1.0, transform=tr)
+    if render is None:
+        for i in range(H):
+            for j in range(W):
+                if maze[i, j]:
+                    ax.add_patch(Rectangle(
+                        (j * unit - ox - unit / 2, i * unit - oy - unit / 2),
+                        unit, unit, facecolor=WALL, edgecolor="none", zorder=3))
 
     gx, gy = task["goal_xy"]
     sx, sy = task["init_xy"]
@@ -110,10 +140,18 @@ def _panel(ax, field, geodesic, count, meta, task, *, cmap, vmin, vmax,
         if len(path):
             xs = (path[:, 1] + 0.5) * bs - ox - unit / 2
             ys = (path[:, 0] + 0.5) * bs - oy - unit / 2
-            ax.plot(xs, ys, color=P.INK, lw=1.0, alpha=0.45, zorder=4,
-                    solid_capstyle="round")
-    ax.plot([sx], [sy], marker="o", ms=7, mfc="none", mec=P.INK, mew=1.4, zorder=5)
-    ax.plot([gx], [gy], marker="*", ms=13, mfc=P.SURFACE, mec=P.INK, mew=1.1, zorder=5)
+            ax.plot(xs, ys, color=P.INK, lw=1.0, alpha=0.5, zorder=4,
+                    solid_capstyle="round", transform=tr)
+    ax.plot([sx], [sy], marker="o", ms=7, mfc="none", mec=P.INK, mew=1.4, zorder=5,
+            transform=tr)
+    ax.plot([gx], [gy], marker="*", ms=13, mfc=P.SURFACE, mec=P.INK, mew=1.1, zorder=5,
+            transform=tr)
+    if render is not None:
+        ax.set_xlim(0, render["width"])
+        ax.set_ylim(render["height"], 0)
+    else:
+        ax.set_xlim(ext[0], ext[1])
+        ax.set_ylim(ext[2], ext[3])
     ax.set_xticks([])
     ax.set_yticks([])
     for s in ax.spines.values():
@@ -133,6 +171,16 @@ def _fill_nearest(a, free):
         d = np.abs(known - np.array([i, j])).sum(1)
         out[i, j] = a[tuple(known[np.argmin(d)])]
     return out
+
+
+def _load_render(rec):
+    """The run's own top-down frame and its world->pixel affine, if it has one."""
+    meta = rec["meta"]
+    png = os.path.join(rec["dir"], "maze_render.png")
+    if not meta.get("render") or not os.path.exists(png):
+        return None
+    import matplotlib.image as mpimg
+    return dict(meta["render"], image=mpimg.imread(png))
 
 
 def _attach_geometry(rec):
@@ -160,6 +208,7 @@ def _attach_geometry(rec):
                 cur = nxt
                 path.append(cur)
         t["_path"] = path
+    rec["render"] = _load_render(rec)
     return rec
 
 
@@ -199,7 +248,7 @@ def _field_figure(recs, out_dir, *, key, name, cmap, diverging, title, sublabel,
                 vmin = float(np.percentile(vals, 2))
                 vmax = float(np.percentile(vals, 98))
             _panel(ax, fld, geod, cnt, m, task, cmap=cmap, vmin=vmin, vmax=vmax,
-                   interpolate=interpolate)
+                   interpolate=interpolate, render=rec.get("render"))
             met = rec["metrics"][key]["per_task"][ti]
             ax.set_title(f"[{vmin:+.2f}, {vmax:+.2f}]", color=P.MUTED, fontsize=7.5,
                          loc="right", pad=3)
@@ -220,7 +269,12 @@ def _field_figure(recs, out_dir, *, key, name, cmap, diverging, title, sublabel,
                          met.get("goal_percentile"), met.get("coverage")])
 
     fig.suptitle(title, color=P.INK, fontsize=13, x=0.012, ha="left", y=1.005)
-    note = ("walls grey; bins below the state floor hatched; o start, * goal; "
+    on_render = any(r.get("render") for r in recs)
+    note = (("field drawn on the environment's own top-down render, placed by a "
+             "measured world->pixel affine (fit RMS < 1 px); wall TOPS overhang the "
+             "floor slightly under the perspective camera. "
+             if on_render else "walls grey; ")
+            + "bins below the state floor hatched; o start, * goal; "
             "thin line = one shortest path. Each panel on its own 2nd-98th percentile "
             "(printed above it) -- Q is an unnormalised log-ratio, so scale is not "
             "comparable across runs.")

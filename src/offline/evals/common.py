@@ -437,3 +437,111 @@ def spearman(a, b) -> float:
     rb = rb - rb.mean()
     den = np.sqrt((ra ** 2).sum() * (rb ** 2).sum())
     return float((ra * rb).sum() / den) if den > 0 else float("nan")
+
+
+# ---------------------------------------------------------------------------
+# Top-down render, with a verified world -> pixel map
+# ---------------------------------------------------------------------------
+
+def render_top_down(env, geo: "MazeGeometry", width: int = 480, n_calib: int = 9):
+    """A clean top-down image of the maze plus the affine that places world xy on it.
+
+    OGBench's maze camera is `elevation=-90` (straight down) at `lookat=(2(W-3),
+    2(H-3), 0)` and `distance=5(W-2)`, so any horizontal plane projects to the image
+    by an affine map. Rather than derive it from fovy and azimuth and hope the sign
+    conventions match, it is MEASURED: the body is teleported to `n_calib` known free
+    cells, each pose is rendered, and the affine is least-squares fitted to where the
+    body actually appeared. The fit is then checked leave-one-out, which is a purely
+    geometric check -- no assumption about what anything in the image looks like.
+
+    One correction is applied and it is exact arithmetic, not a fudge. The fit is made
+    at the body's height `z` (0.795 for the ant, constant), while the value field lives
+    on the floor at z=0. Under a camera `d` above the lookat, pixel offset from the
+    principal point scales as `1/(d - z)`, so the floor map is the fitted one scaled by
+    `(d - z)/d` about the principal point -- which is itself the pixel of the lookat.
+
+    The background is the MEDIAN over the calibration frames, so the body is removed.
+
+    Returns None if the environment cannot render (no GL backend), with the reason.
+    Caveat worth knowing when reading the figures: the walls are 3D boxes, so their
+    TOPS splay outward from the floor footprint under the perspective camera. The
+    overlay is aligned to the floor plane, where the states are; wall tops therefore
+    overhang the field slightly at wall edges. Verified once on
+    antmaze-medium-stitch-v0: the rendered-wall / predicted-wall IoU peaks at a
+    (0, 0) pixel shift, i.e. the floor-plane map is correctly centred.
+    """
+    try:
+        import mujoco
+    except Exception as e:                                     # noqa: BLE001
+        return None, f"mujoco not importable: {type(e).__name__}"
+    u = env.unwrapped
+    cam = getattr(u, "custom_camera", None)
+    if cam is None or not hasattr(cam, "distance"):
+        return None, "env has no custom top-down camera"
+    try:
+        R = mujoco.Renderer(u.model, width=width, height=width)
+    except Exception as e:                                     # noqa: BLE001
+        # The offscreen framebuffer is capped by the model XML (<global offheight>).
+        try:
+            R = mujoco.Renderer(u.model)
+            width = R.height
+        except Exception as e2:                                # noqa: BLE001
+            return None, f"renderer unavailable: {type(e2).__name__}: {e2}"
+
+    try:
+        env.reset(options=dict(task_id=1))   # the body must exist before set_xy
+    except Exception as e:                                     # noqa: BLE001
+        return None, f"reset failed: {type(e).__name__}: {e}"
+
+    free = [(i, j) for i in range(geo.H) for j in range(geo.W) if not geo.maze[i, j]]
+    pts = [free[k] for k in np.linspace(0, len(free) - 1, min(n_calib, len(free)))
+           .astype(int)]
+    frames, xys, zs = [], [], []
+    try:
+        for ij in pts:
+            xy = geo.ij_to_xy(ij)
+            u.set_xy(xy)
+            mujoco.mj_forward(u.model, u.data)
+            R.update_scene(u.data, camera=cam)
+            frames.append(R.render().astype(np.float64))
+            xys.append(xy)
+            zs.append(float(u.data.qpos[2]))
+    except Exception as e:                                     # noqa: BLE001
+        return None, f"render failed: {type(e).__name__}: {e}"
+
+    frames = np.stack(frames)
+    bg = np.median(frames, axis=0)
+    uv = []
+    for f in frames:
+        d = np.abs(f - bg).sum(-1)
+        m = d > np.percentile(d, 99.7)
+        ii, jj = np.nonzero(m)
+        w = d[m]
+        uv.append([(jj * w).sum() / w.sum(), (ii * w).sum() / w.sum()])
+    uv, xys = np.array(uv), np.array(xys)
+
+    def _fit(X, Y):
+        return np.linalg.lstsq(np.c_[X, np.ones(len(X))], Y, rcond=None)[0]
+
+    A = _fit(xys, uv)
+    rms = float(np.sqrt((((np.c_[xys, np.ones(len(xys))] @ A) - uv) ** 2).sum(1).mean()))
+    loo = []
+    for k in range(len(xys)):
+        keep = [i for i in range(len(xys)) if i != k]
+        Ak = _fit(xys[keep], uv[keep])
+        loo.append(float(np.linalg.norm(np.r_[xys[k], 1] @ Ak - uv[k])))
+
+    M, t = A[:2].T, A[2]
+    z, dist = float(np.mean(zs)), float(cam.distance)
+    lookat = np.asarray(cam.lookat, dtype=float)[:2]
+    p0 = M @ lookat + t                      # principal point: the lookat's pixel
+    Mf = M * (dist - z) / dist               # same map, on the floor plane
+    tf = p0 - Mf @ lookat
+    return dict(
+        image=bg.astype(np.uint8),
+        affine=[[Mf[0, 0], Mf[0, 1], tf[0]], [Mf[1, 0], Mf[1, 1], tf[1]]],
+        width=int(width), height=int(width), fit_rms_px=round(rms, 3),
+        loo_max_px=round(float(max(loo)), 3), n_calib=len(xys),
+        torso_z=round(z, 4), camera_distance=dist, lookat=lookat.tolist(),
+        floor_scale=round((dist - z) / dist, 6),
+    ), None
