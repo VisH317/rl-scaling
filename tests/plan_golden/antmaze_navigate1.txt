@@ -1,0 +1,22 @@
+antmaze_navigate1   (<repo>/experiments/antmaze_navigate1.yaml)
+  dataset   antmaze-medium-navigate-v0  size 1,000,000
+  axes      agent=['crl']  depth=[4, 32]
+  seeds     [0, 1, 2]
+  runs      6
+  critic    binary_nce / dot / lse=0.0 / ensemble=2 / repr_dim=64
+  actor     ddpgbc  alpha=0.1  discount=0.99  p_trajgoal=0.5/p_randomgoal=0.5
+  arch      residual  width=256  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch=1024  [BASELINE]
+  train     step_cap=2,000,000  plateau>=1,000,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  run_id                                                         agent   d seed
+  antmaze_navigate1__crl__d4__n1000000__s0__5f93c574             crl     4    0
+  antmaze_navigate1__crl__d4__n1000000__s1__d30ca563             crl     4    1
+  antmaze_navigate1__crl__d4__n1000000__s2__c507c4a7             crl     4    2
+  antmaze_navigate1__crl__d32__n1000000__s0__a5906993            crl    32    0
+  antmaze_navigate1__crl__d32__n1000000__s1__f6a2781a            crl    32    1
+  antmaze_navigate1__crl__d32__n1000000__s2__036ea8f3            crl    32    2
+
+(nothing written -- add --write to generate configs, --submit to also queue)

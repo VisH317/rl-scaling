@@ -7,6 +7,14 @@
     "antmaze_ensemble1__crl__d32__n1000000__s1__9823ab23",
     "antmaze_ensemble1__crl__d32__n1000000__s2__fad3e88b"
   ],
+  "antmaze_navigate1": [
+    "antmaze_navigate1__crl__d4__n1000000__s0__5f93c574",
+    "antmaze_navigate1__crl__d4__n1000000__s1__d30ca563",
+    "antmaze_navigate1__crl__d4__n1000000__s2__c507c4a7",
+    "antmaze_navigate1__crl__d32__n1000000__s0__a5906993",
+    "antmaze_navigate1__crl__d32__n1000000__s1__f6a2781a",
+    "antmaze_navigate1__crl__d32__n1000000__s2__036ea8f3"
+  ],
   "humanoid_ensemble1": [
     "humanoid_ensemble1__crl__d4__n1000000__s0__afee9b28",
     "humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09",
