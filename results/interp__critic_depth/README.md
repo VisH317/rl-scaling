@@ -1,11 +1,11 @@
 # interp01 — critic interpretability results
 
 <!-- AUTO:meta -->
-**Suite** `interp01` · **generated** 2026-11-06 14:41 · **8 checkpoints**
+**Suite** `interp01` · **generated** 2026-11-06 14:52 · **8 checkpoints**
 
 | | |
 |---|---|
-| dataset | `humanoidmaze-medium-navigate-v0` |
+| datasets | `antmaze-medium-stitch-v0`, `humanoidmaze-medium-navigate-v0` |
 | grids | phase1_repro, humanoid_ensemble1 |
 | states | 26,148 from `humanoidmaze-medium-navigate-v0-val.npz` (val, held out) |
 | binning | 4x per cell = 1.00 world units; 416/416 free bins cleared the state floor |
@@ -65,15 +65,22 @@ One per (agent, depth), chosen by the rule in the suite file. The whole seed set
 shown because the between-seed spread is comparable to some depth gaps.
 
 <!-- AUTO:checkpoints -->
+**`humanoid_ensemble1`** — `humanoidmaze-medium-navigate-v0`
+
 | depth | seed | score | rule | all seeds | spread | run |
 |---|---|---|---|---|---|---|
 | 4 | 1 | 0.747 | `best_success@0` | s0=0.693, s1=0.747 | 0.053 | `humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09` |
-| 4 | 1 | 0.444 | `reeval@50` | s0=0.376, s1=0.444, s2=0.208 | 0.236 | `phase1_repro__crl__d4__n1000000__s1__acdde8ae` |
 | 8 | 0 | 0.707 | `best_success@0` | s0=0.707, s1=0.667 | 0.040 | `humanoid_ensemble1__crl__d8__n1000000__s0__a857e3c3` |
-| 8 | 2 | 0.580 | `reeval@50` | s0=0.544, s1=0.516, s2=0.580 | 0.064 | `phase1_repro__crl__d8__n1000000__s2__43511f71` |
 | 16 | 1 | 0.680 | `best_success@0` | s0=0.613, s1=0.680 | 0.067 | `humanoid_ensemble1__crl__d16__n1000000__s1__a7dcc884` |
-| 16 | 2 | 0.904 | `reeval@50` | s0=0.728, s1=0.720, s2=0.904 | 0.184 | `phase1_repro__crl__d16__n1000000__s2__c674fc85` |
 | 32 | 0 | 0.600 | `best_success@0` | s0=0.600, s1=0.600 | 0.000 | `humanoid_ensemble1__crl__d32__n1000000__s0__d1da46a4` |
+
+**`phase1_repro`** — `antmaze-medium-stitch-v0`
+
+| depth | seed | score | rule | all seeds | spread | run |
+|---|---|---|---|---|---|---|
+| 4 | 1 | 0.444 | `reeval@50` | s0=0.376, s1=0.444, s2=0.208 | 0.236 | `phase1_repro__crl__d4__n1000000__s1__acdde8ae` |
+| 8 | 2 | 0.580 | `reeval@50` | s0=0.544, s1=0.516, s2=0.580 | 0.064 | `phase1_repro__crl__d8__n1000000__s2__43511f71` |
+| 16 | 2 | 0.904 | `reeval@50` | s0=0.728, s1=0.720, s2=0.904 | 0.184 | `phase1_repro__crl__d16__n1000000__s2__c674fc85` |
 | 32 | 2 | 0.907 | `best_success@0` | s0=0.827, s1=0.880, s2=0.907 | 0.080 | `phase1_repro__crl__d32__n1000000__s2__c92f51af` |
 <!-- /AUTO:checkpoints -->
 
@@ -97,15 +104,24 @@ log-ratio, so **only the shape is comparable across rows**, never the magnitude.
 ![topology](fig2_topology.png)
 
 <!-- AUTO:topology -->
+**`humanoid_ensemble1`** — `humanoidmaze-medium-navigate-v0`
+
 | depth | ρ(Q, −geodesic) | ρ(Q, −euclid) | topology_gain | bins | coverage |
 |---|---|---|---|---|---|
 | 4 | 0.689 | 0.629 | **+0.059** | 416 | 1.00 |
-| 4 | 0.647 | 0.672 | **-0.025** | 285 | 0.69 |
 | 8 | 0.683 | 0.669 | **+0.015** | 416 | 1.00 |
-| 8 | 0.542 | 0.539 | **+0.003** | 285 | 0.69 |
 | 16 | 0.779 | 0.712 | **+0.067** | 416 | 1.00 |
-| 16 | 0.464 | 0.476 | **-0.013** | 285 | 0.69 |
 | 32 | 0.724 | 0.708 | **+0.016** | 416 | 1.00 |
+
+Units: ρ is dimensionless in [−1, 1]; `topology_gain` is their difference. `coverage` is a control and must be identical across rows.
+
+**`phase1_repro`** — `antmaze-medium-stitch-v0`
+
+| depth | ρ(Q, −geodesic) | ρ(Q, −euclid) | topology_gain | bins | coverage |
+|---|---|---|---|---|---|
+| 4 | 0.647 | 0.672 | **-0.025** | 285 | 0.69 |
+| 8 | 0.542 | 0.539 | **+0.003** | 285 | 0.69 |
+| 16 | 0.464 | 0.476 | **-0.013** | 285 | 0.69 |
 | 32 | 0.393 | 0.386 | **+0.007** | 285 | 0.69 |
 
 Units: ρ is dimensionless in [−1, 1]; `topology_gain` is their difference. `coverage` is a control and must be identical across rows.
@@ -123,15 +139,24 @@ subtracting coordinates. Positive = the field bends around walls.
 ![metrics](fig4_metrics.png)
 
 <!-- AUTO:field -->
+**`humanoid_ensemble1`** — `humanoidmaze-medium-navigate-v0`
+
 | depth | peak_geodesic | top5_geodesic | path_monotone | goal_percentile | q_std | ens_gap |
 |---|---|---|---|---|---|---|
 | 4 | 1.40 | 3.08 | 0.656 | 0.991 | 2.366 | — |
-| 4 | 4.40 | 4.46 | 0.677 | 0.983 | 5.201 | 3.889 |
 | 8 | 2.00 | 3.31 | 0.568 | 0.989 | 2.311 | — |
-| 8 | 4.20 | 4.09 | 0.609 | 0.972 | 4.659 | 4.450 |
 | 16 | 1.20 | 3.48 | 0.605 | 0.991 | 2.510 | — |
-| 16 | 5.80 | 4.29 | 0.649 | 0.981 | 4.167 | 4.464 |
 | 32 | 1.20 | 3.03 | 0.611 | 0.991 | 2.226 | — |
+
+Units: the two `*_geodesic` columns are **world units** (0 is perfect); `path_monotone` and `goal_percentile` are fractions; `q_std` and `ens_gap` are **logits** and are not comparable across rows — read `ens_gap` relative to `q_std` in the same row.
+
+**`phase1_repro`** — `antmaze-medium-stitch-v0`
+
+| depth | peak_geodesic | top5_geodesic | path_monotone | goal_percentile | q_std | ens_gap |
+|---|---|---|---|---|---|---|
+| 4 | 4.40 | 4.46 | 0.677 | 0.983 | 5.201 | 3.889 |
+| 8 | 4.20 | 4.09 | 0.609 | 0.972 | 4.659 | 4.450 |
+| 16 | 5.80 | 4.29 | 0.649 | 0.981 | 4.167 | 4.464 |
 | 32 | 5.00 | 4.04 | 0.640 | 0.984 | 3.225 | 4.423 |
 
 Units: the two `*_geodesic` columns are **world units** (0 is perfect); `path_monotone` and `goal_percentile` are fractions; `q_std` and `ens_gap` are **logits** and are not comparable across rows — read `ens_gap` relative to `q_std` in the same row.
@@ -153,15 +178,24 @@ directions differ by at least the split angle. Bins where they agree are drawn *
 ![action tests](fig6_action_tests.png)
 
 <!-- AUTO:action -->
+**`humanoid_ensemble1`** — `humanoidmaze-medium-navigate-v0`
+
 | depth | action_topology_gain | (all bins) | oracle_gap | (split bins) | split bin fraction |
 |---|---|---|---|---|---|
 | 4 | **-0.013** | -0.005 | -0.101 | -0.051 | 0.41 |
-| 4 | **-0.051** | -0.006 | +0.439 | +0.607 | 0.40 |
 | 8 | **-0.047** | -0.018 | -0.092 | -0.043 | 0.41 |
-| 8 | **+0.051** | +0.043 | +0.176 | +0.226 | 0.40 |
 | 16 | **-0.024** | -0.009 | -0.094 | -0.055 | 0.41 |
-| 16 | **+0.035** | +0.027 | +0.018 | +0.077 | 0.40 |
 | 32 | **-0.023** | -0.012 | -0.088 | -0.066 | 0.41 |
+
+Units: **logits**, so sign and trend only. `action_topology_gain` is restricted to bins where the geodesic and straight-line directions disagree by at least 45°; the `(all bins)` column is the same quantity without that restriction, as a check that the restriction concentrates the signal rather than creating it.
+
+**`phase1_repro`** — `antmaze-medium-stitch-v0`
+
+| depth | action_topology_gain | (all bins) | oracle_gap | (split bins) | split bin fraction |
+|---|---|---|---|---|---|
+| 4 | **-0.051** | -0.006 | +0.439 | +0.607 | 0.40 |
+| 8 | **+0.051** | +0.043 | +0.176 | +0.226 | 0.40 |
+| 16 | **+0.035** | +0.027 | +0.018 | +0.077 | 0.40 |
 | 32 | **+0.090** | +0.045 | -0.085 | -0.028 | 0.40 |
 
 Units: **logits**, so sign and trend only. `action_topology_gain` is restricted to bins where the geodesic and straight-line directions disagree by at least 45°; the `(all bins)` column is the same quantity without that restriction, as a check that the restriction concentrates the signal rather than creating it.
@@ -180,31 +214,40 @@ Task 4 is the one to look at: its start `(6,5)` is a dead end whose only exit po
 **180° away** from the goal, and GCBC scores 0.00 on it.
 
 <!-- AUTO:pertask -->
+**`humanoid_ensemble1`** — `humanoidmaze-medium-navigate-v0`
+
 | metric | depth | task 1 | task 2 | task 3 | task 4 | task 5 |
 |---|---|---|---|---|---|---|
 | action_topology_gain | 4 | -0.054 | -0.084 | +0.110 | -0.020 | -0.017 |
-| action_topology_gain | 4 | +0.226 | -0.412 | +0.129 | -0.188 | -0.010 |
 | action_topology_gain | 8 | -0.068 | -0.069 | +0.013 | -0.070 | -0.042 |
-| action_topology_gain | 8 | +0.036 | -0.016 | +0.164 | -0.074 | +0.147 |
 | action_topology_gain | 16 | -0.008 | -0.081 | +0.047 | -0.076 | +0.000 |
-| action_topology_gain | 16 | -0.016 | +0.117 | -0.102 | +0.041 | +0.134 |
 | action_topology_gain | 32 | -0.022 | -0.054 | +0.029 | -0.015 | -0.052 |
-| action_topology_gain | 32 | +0.041 | +0.263 | -0.040 | +0.184 | +0.003 |
 | topology_gain | 4 | +0.021 | +0.080 | +0.150 | +0.063 | -0.016 |
-| topology_gain | 4 | -0.058 | -0.083 | +0.085 | -0.031 | -0.036 |
 | topology_gain | 8 | -0.021 | +0.060 | +0.055 | +0.004 | -0.026 |
-| topology_gain | 8 | -0.058 | -0.044 | +0.123 | -0.041 | +0.035 |
 | topology_gain | 16 | +0.041 | +0.056 | +0.154 | +0.079 | +0.007 |
-| topology_gain | 16 | -0.072 | -0.043 | +0.127 | -0.018 | -0.057 |
 | topology_gain | 32 | -0.007 | +0.011 | +0.063 | +0.055 | -0.041 |
-| topology_gain | 32 | +0.007 | -0.049 | +0.108 | -0.005 | -0.026 |
 | path_monotone | 4 | 0.625 | 0.600 | 0.889 | 0.559 | 0.607 |
-| path_monotone | 4 | 0.583 | 0.629 | 0.667 | 0.800 | 0.706 |
 | path_monotone | 8 | 0.550 | 0.550 | 0.667 | 0.500 | 0.571 |
-| path_monotone | 8 | 0.611 | 0.571 | 0.667 | 0.550 | 0.647 |
 | path_monotone | 16 | 0.550 | 0.550 | 0.722 | 0.559 | 0.643 |
-| path_monotone | 16 | 0.583 | 0.571 | 0.833 | 0.550 | 0.706 |
 | path_monotone | 32 | 0.600 | 0.475 | 0.778 | 0.559 | 0.643 |
+
+Task starts and goals: **1** (1, 1)→(6, 6); **2** (6, 1)→(1, 6); **3** (5, 3)→(4, 2); **4** (6, 5)→(6, 1); **5** (2, 6)→(1, 1)
+
+**`phase1_repro`** — `antmaze-medium-stitch-v0`
+
+| metric | depth | task 1 | task 2 | task 3 | task 4 | task 5 |
+|---|---|---|---|---|---|---|
+| action_topology_gain | 4 | +0.226 | -0.412 | +0.129 | -0.188 | -0.010 |
+| action_topology_gain | 8 | +0.036 | -0.016 | +0.164 | -0.074 | +0.147 |
+| action_topology_gain | 16 | -0.016 | +0.117 | -0.102 | +0.041 | +0.134 |
+| action_topology_gain | 32 | +0.041 | +0.263 | -0.040 | +0.184 | +0.003 |
+| topology_gain | 4 | -0.058 | -0.083 | +0.085 | -0.031 | -0.036 |
+| topology_gain | 8 | -0.058 | -0.044 | +0.123 | -0.041 | +0.035 |
+| topology_gain | 16 | -0.072 | -0.043 | +0.127 | -0.018 | -0.057 |
+| topology_gain | 32 | +0.007 | -0.049 | +0.108 | -0.005 | -0.026 |
+| path_monotone | 4 | 0.583 | 0.629 | 0.667 | 0.800 | 0.706 |
+| path_monotone | 8 | 0.611 | 0.571 | 0.667 | 0.550 | 0.647 |
+| path_monotone | 16 | 0.583 | 0.571 | 0.833 | 0.550 | 0.706 |
 | path_monotone | 32 | 0.639 | 0.571 | 0.833 | 0.450 | 0.706 |
 
 Task starts and goals: **1** (1, 1)→(6, 6); **2** (6, 1)→(1, 6); **3** (5, 3)→(4, 2); **4** (6, 5)→(6, 1); **5** (2, 6)→(1, 1)

@@ -157,21 +157,6 @@ def render(args) -> int:
           + (f"     refreshing every {args.watch}s" if args.watch else ""))
     print("=" * width)
 
-    # ---- Slurm ------------------------------------------------------------
-    if not jq:
-        print("\n SLURM: nothing queued or running.")
-    else:
-        run = [r for r in jq if r["state"] == "RUNNING"]
-        pend = [r for r in jq if r["state"] != "RUNNING"]
-        print(f"\n SLURM  {len(run)} running, {len(pend)} pending"
-              f"   (GPU QOS allows 2 running jobs, 8 GPUs, 2 nodes)")
-        print(f"   {'job':>9}  {'name':<14}{'state':<9}{'elapsed':>9}{'left':>10}"
-              f"  {'node':<15}reason")
-        for r in run + pend:
-            reason = "" if r["reason"] in ("None", "none") else r["reason"]
-            print(f"   {r['job']:>9}  {r['name']:<14}{r['state']:<9}"
-                  f"{r['elapsed']:>9}{r['left']:>10}  {r['node'] or '-':<15}{reason}")
-
     # ---- runs -------------------------------------------------------------
     by_grid: dict[str, list] = {}
     for r in recs:
@@ -181,7 +166,15 @@ def render(args) -> int:
         print("\n no runs found on scratch yet.")
         return 0
 
-    for grid in sorted(by_grid):
+    # NEWEST LAST, everywhere. A terminal scrolls to the bottom on every refresh, so
+    # whatever is printed last is what you actually see -- and under `--watch` the top
+    # of the frame is gone. Grids are therefore ordered by when they were last
+    # touched, so the experiment running right now sits just above the prompt, and
+    # finished grids scroll off the top where they belong.
+    def _touched(grid):
+        return max((r.get("updated") or 0) for r in by_grid[grid])
+
+    for grid in sorted(by_grid, key=_touched):
         rs = by_grid[grid]
         shown = [r for r in rs if not r.get("_hidden")]
         n_done = sum(1 for r in rs if r.get("_done"))
@@ -191,7 +184,9 @@ def render(args) -> int:
             continue
         print(f"   {'agent':<5}{'d':>3}{'s':>2}  {'progress':<20}{'step':>18}"
               f"{'best':>7}{'last eval':>11}{'rate':>9}{'eta':>8}  state")
-        for r in sorted(shown, key=lambda x: (x.get("agent", ""), x.get("depth", 0),
+        # Same rule inside a grid: finished rows first, still-running rows last.
+        for r in sorted(shown, key=lambda x: (bool(not x.get("_done")),
+                                              x.get("agent", ""), x.get("depth", 0),
                                               x.get("seed", 0))):
             state, detail = classify(r, live_nodes, now)
             step, cap = r.get("step") or 0, r.get("step_cap") or 1
@@ -210,6 +205,24 @@ def render(args) -> int:
             if ev and ev[2] and args.tasks:
                 print(f"        tasks @ {ev[0]:,}: "
                       + "  ".join(f"t{i + 1} {v:.2f}" for i, v in enumerate(ev[2])))
+
+    # ---- Slurm, last: this is the part worth seeing without scrolling -------
+    if not jq:
+        print("\n SLURM: nothing queued or running.")
+    else:
+        run = [r for r in jq if r["state"] == "RUNNING"]
+        pend = [r for r in jq if r["state"] != "RUNNING"]
+        print(f"\n SLURM  {len(run)} running, {len(pend)} pending"
+              f"   (GPU QOS allows 2 running jobs, 8 GPUs, 2 nodes)")
+        print(f"   {'job':>9}  {'name':<22}{'state':<9}{'elapsed':>9}{'left':>10}"
+              f"  {'node':<15}reason")
+        for r in run + pend:
+            reason = "" if r["reason"] in ("None", "none") else r["reason"]
+            # Truncate, never overflow: a long job name used to run into the state
+            # column and the row stopped being readable as a table.
+            nm = r['name'] if len(r['name']) <= 22 else r['name'][:21] + "\u2026"
+            print(f"   {r['job']:>9}  {nm:<22}{r['state']:<9}"
+                  f"{r['elapsed']:>9}{r['left']:>10}  {r['node'] or '-':<15}{reason}")
 
     attention = [r for r in recs if not r.get("_done")
                  and classify(r, live_nodes, now)[0] in ("stalled", "orphaned")]

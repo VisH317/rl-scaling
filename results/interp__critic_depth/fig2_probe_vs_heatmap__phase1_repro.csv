@@ -1,0 +1,5 @@
+depth,probe_r2_geodesic,rho_geodesic,run_id
+4,0.809,0.6473,phase1_repro__crl__d4__n1000000__s1__acdde8ae
+8,0.7271,0.5423,phase1_repro__crl__d8__n1000000__s2__43511f71
+16,0.6702,0.4638,phase1_repro__crl__d16__n1000000__s2__c674fc85
+32,0.5991,0.393,phase1_repro__crl__d32__n1000000__s2__c92f51af

@@ -37,22 +37,32 @@ tables are not typed from terminal output.
 ## 1. What is different from `phase1_repro`
 
 `experiments/humanoid_ensemble1.yaml` describes itself as changing the dataset and
-`critic_ensemble`. Read from the two runs' own `config.json`, there are three
-differences:
+`critic_ensemble`. Read from the two runs' own `config.json`, there are **four**
+substantive differences:
 
-| | `phase1_repro` | `humanoid_ensemble1` |
-|---|---|---|
-| dataset | `antmaze-medium-stitch-v0` | `humanoidmaze-medium-navigate-v0` |
-| `critic_ensemble` | 2 | **1** |
-| `discount` | 0.99 | **0.995** |
-| seeds | 3 | 2 |
-| observation / action dim | 29 / 8 | 69 / 21 |
-| trajectory length | 201 rows | 2001 rows |
+| | `phase1_repro` | `humanoid_ensemble1` | in the YAML? |
+|---|---|---|---|
+| dataset | `antmaze-medium-stitch-v0` | `humanoidmaze-medium-navigate-v0` | yes |
+| `critic_ensemble` | 2 | **1** | yes |
+| `discount` | 0.99 | **0.995** | **no** |
+| `actor_p_trajgoal / actor_p_randomgoal` | 0.5 / 0.5 | **1.0 / 0.0** | **no** |
+| *(consequences, not knobs)* | | | |
+| seeds | 3 | 2 | yes |
+| observation / action dim | 29 / 8 | 69 / 21 | — |
+| trajectories × length | 5000 × 201 | 1000 × 2001 | — |
 
-The `discount` difference is not in the YAML: `use_published_flags` picks up OGBench's
-published CRL command for this dataset, which sets 0.995. That doubles the geometric
-goal-sampling horizon. It is the right setting to run — it is what the published number
-was measured with — but it is a third thing that moved.
+**Two of the four are not in the YAML at all.** `use_published_flags` applies OGBench's
+published CRL command for whichever dataset is named, and for
+`humanoidmaze-medium-navigate` that sets `discount = 0.995` (doubling the geometric
+goal-sampling horizon) and leaves `actor_p_trajgoal/randomgoal` at `1.0/0.0`, against
+stitch's published `0.5/0.5`. Both are the right settings to run — they are what the
+published numbers were measured with — but each is a thing that moved silently.
+
+**The fourth may matter most, and was found last.** `actor_p_randomgoal = 0` means the
+actor is **never trained on out-of-trajectory goals**. That is precisely the stitching
+capability, and task 4 — the task that needs it — never works on humanoid at any depth
+(§5). Any explanation of the reversal has to reckon with this before reaching for the
+body.
 
 So "depth helps on antmaze and hurts on humanoidmaze" is not what these two grids
 support. What they support is: **the configuration that scales on antmaze does not scale
@@ -63,7 +73,7 @@ Two more differences worth holding, because they cut the other way:
 - `-navigate` is not `-stitch`. Its trajectories are 2001 rows, so a single trajectory
   can cover a whole route and far less stitching is required. Stitching is exactly what
   CRL's depth bought on antmaze (§7 of
-  [`../phase1_repro/README.md`](../phase1_repro/README.md)), so there may simply be less
+  [`../antmaze_stitch__depth/README.md`](../antmaze_stitch__depth/README.md)), so there may simply be less
   of that work to do here.
 - The maze is the *same* 8×8 grid with the same five (start, goal) cell pairs. The body
   and the data changed; the geometry did not.
@@ -152,14 +162,124 @@ Every run stopped on `plateau`, not on the step cap, and `plateau_min_steps` is
 own peak. That is a configuration choice interacting with the finding, not a property of
 depth: a depth-32 run early-stopped at its peak would have scored 0.600, not 0.313.
 
-### 3.1 It looks like overfitting, and the critic metrics agree
+### 3.1 The critic, in detail — it does not get worse, it stops generalising
 
 ![critic diagnostics](fig3_critic_diagnostics.png)
 
-`fig3_critic_diagnostics.csv` at 1,000,000 steps, with antmaze beside it for scale:
+**What the three logged critic metrics actually are.** All come from one **1024×1024**
+logit matrix per batch (`lib/ogbench/impls/agents/crl.py:42`): every
+`φ(sᵢ,aᵢ)·ψ(gⱼ)/√d` pair in the batch. The diagonal is the true future goal; the other
+1023 entries in each row are goals from *other* trajectories.
+
+| metric | definition | chance level | units |
+|---|---|---|---|
+| `categorical_accuracy` | top-1 retrieval: does the true goal outrank the other 1023? | 1/1024 ≈ **0.001** | fraction, 0–1 |
+| `contrastive_loss` | sigmoid BCE over all 1024² entries, diagonal labelled 1 | — | nats/entry |
+| `binary_accuracy` | fraction of all 1024² entries on the correct side of 0 | **0.99902** | fraction, 0–1 |
+
+> **`binary_accuracy` is close to a null metric — do not read it.** 1023/1024 of the
+> matrix is negatives, so "predict negative everywhere" already scores 0.99902. The
+> values here (0.99907 → 0.99958) look flat *and* look excellent; both impressions are
+> wrong. Backing the true-positive rate out of the excess over base rate gives
+> **≥4.8% → ≥57%** across d4 → d32 — a real 12× change hidden behind two decimal
+> places.
+
+**Training metrics at 1,000,000 gradient steps** (mean over seeds), antmaze beside for
+scale:
 
 | metric | d4 | d8 | d16 | d32 | direction |
 |---|---|---|---|---|---|
+| categorical accuracy, **train** (humanoid) | 0.304 | 0.426 | 0.637 | **0.863** | ↑ with depth |
+| categorical accuracy, **train** (antmaze) | 0.369 | 0.467 | 0.607 | 0.809 | ↑ with depth |
+| contrastive loss, **train** (humanoid) | 0.00447 | 0.00349 | 0.00228 | **0.00103** | ↓ (fits better) |
+| contrastive loss, **val** (humanoid) | 0.00602 | 0.00683 | 0.00877 | **0.00981** | ↑ (generalises worse) |
+| contrastive loss, **val** (antmaze) | 0.00530 | 0.00549 | 0.00642 | 0.00856 | ↑ (generalises worse) |
+
+**The result is in the held-out column, which the figure above does not plot.** From
+`train.csv`, which logs validation versions of all of these:
+
+| depth | retrieval, **train** | retrieval, **val** | logit margin, train | logit margin, val |
+|---|---|---|---|---|
+| 4 | 0.304 | **0.150** | 7.73 | 5.79 |
+| 8 | 0.426 | 0.116 | 10.41 | 6.40 |
+| 16 | 0.637 | 0.101 | 14.26 | 6.57 |
+| 32 | **0.863** | **0.094** | 18.51 | 6.00 |
+
+*Retrieval is `categorical_accuracy`, a fraction 0–1 against a chance level of 0.001.
+Margin is mean positive logit − mean negative logit, in **logits**, scale arbitrary per
+run and comparable only down a column.*
+
+Depth nearly **triples** training retrieval and **cuts held-out retrieval by 37%**. The
+training margin grows 2.4×; the held-out margin does not move at all. The depth-32
+critic is not learning a better value function — it is learning to identify *which
+training trajectory* a goal came from.
+
+The antmaze contrast is the control that makes this a finding rather than a
+restatement of overfitting:
+
+| depth | retrieval train (antmaze) | retrieval **val** (antmaze) |
+|---|---|---|
+| 4 | 0.369 | 0.105 |
+| 32 | 0.809 | 0.101 |
+
+Antmaze overfits too — but its held-out retrieval holds **flat**. Humanoid's degrades.
+
+### 3.2 It turns over when control does
+
+Validation retrieval through training, mean over seeds:
+
+- **d4:** 0.149 → 0.150 across the whole 1M steps. Dead flat. This is the
+  best-controlling configuration.
+- **d32:** peaks at **100k (0.135)**, then decays to 0.082.
+
+Task success for d32 peaks at **200k** and then sheds half its score. The critic's
+held-out retrieval peaks 100k *before* that and falls for the rest of training. These
+are the same phenomenon.
+
+### 3.3 Why this dataset specifically
+
+Three properties make the trajectory-identity shortcut cheap here, all of them
+dataset facts rather than anything about depth. Measured from the npz files:
+
+| | antmaze-stitch | humanoidmaze-navigate |
+|---|---|---|
+| trajectories | 5,000 | **1,000** |
+| trajectory length | 201 rows | **2,001 rows** |
+| observation dim | 29 | **69** |
+
+Five times fewer trajectories to memorise, each ten times longer, described by a state
+with more than twice the dimensions — a humanoid's pose and joint velocities are a far
+more distinctive fingerprint than an ant's. Since the in-batch negatives are almost all
+drawn from *other* trajectories, "which trajectory is this?" solves the training task
+without any spatial understanding. At 512 epochs over the data there is ample
+opportunity to find it.
+
+**This is testable and is being tested**: `antmaze_navigate__depth` is the ant body on
+navigate data (1000 × 1001), which has this structure without the humanoid.
+
+### 3.4 And nothing damps the consequence
+
+`critic_ensemble: 1` matters more than it looks. The actor maximises `min` over the
+ensemble (`src/offline/critic_losses.py:214`), and with a single critic `_reduce_q` is
+a **pass-through** — there is no pessimism at all. The actor's whole job is to find
+actions where `Q` is high, which means actively seeking the critic's errors, and a
+deeper critic has sharper, more confident ones. Antmaze had the `min` over two.
+
+The actor's own metrics agree independently: humanoid held-out behaviour-cloning MSE
+gets *worse* with depth (0.0804 → 0.0884) while antmaze's improves a lot
+(0.1453 → 0.0750).
+
+**This is covered by `antmaze_stitch__depth_ensemble1`**, running now.
+
+### 3.5 What the direct probes say
+
+[`../interp__critic_depth/`](../interp__critic_depth/) has now run on this grid. The
+short version, with the full tables and controls in that folder: the humanoid critic's
+representation encodes geodesic distance **well** and far above an untrained baseline,
+and still controls badly — so linear decodability of maze geometry is not what
+separates the two environments either.
+
+---|---|---|---|---|---|
 | categorical accuracy (humanoid) | 0.304 | 0.426 | 0.637 | **0.863** | ↑ with depth |
 | categorical accuracy (antmaze) | 0.369 | 0.467 | 0.607 | 0.809 | ↑ with depth |
 | train contrastive loss (humanoid) | 0.00447 | 0.00349 | 0.00228 | **0.00103** | ↓ (better fit) |
@@ -175,14 +295,14 @@ But note what this does **not** explain. The train/val decoupling is present on 
 too, at a similar magnitude, and there depth still helped. Overfitting of the contrastive
 objective is therefore not sufficient on its own to produce the reversal — something
 about how this critic converts into actions has to differ. That is what
-[`../interp01/`](../interp01/) is built to measure, and it has not yet been run on this
+[`../interp01/`](../interp__critic_depth/) is built to measure, and it has not yet been run on this
 grid (§5).
 
 ---
 
 ## 4. What would actually separate the causes
 
-The reversal has at least four candidate explanations, and this grid cannot distinguish
+The reversal has at least five candidate explanations, and this grid cannot distinguish
 them:
 
 1. **The body.** 69-D observations and 21-D actions instead of 29/8; a humanoid falls
@@ -194,6 +314,9 @@ them:
    is trained on, and deep networks may be more sensitive to that.
 4. **Less stitching required.** `-navigate`'s long trajectories mean the skill depth
    bought on antmaze may not be needed.
+5. **`actor_p_randomgoal = 0`.** The actor never sees an out-of-trajectory goal, so the
+   stitching behaviour is not trained for at all — a stronger version of (4), and the
+   one with no experiment covering it yet.
 
 The cheapest discriminating run is **antmaze-medium-stitch with `critic_ensemble: 1`**,
 depths 4 and 32, 2 seeds — 4 runs. If depth still scales there, (2) is cleared and the

@@ -31,7 +31,7 @@ the tables here — nothing below is typed by hand from terminal output.
 >
 > **It did not.** `humanoid_ensemble1` has since finished and the trend *reverses* there:
 > 64.2 → 31.3 on the same metric across the same depths. See
-> [`../humanoid_ensemble1/README.md`](../humanoid_ensemble1/README.md), including why
+> [`../humanoidmaze_navigate__depth_ensemble1/README.md`](../humanoidmaze_navigate__depth_ensemble1/README.md), including why
 > that grid moved three variables and so does not isolate the environment. Read §2
 > before §6.
 
@@ -518,7 +518,7 @@ sit between 0.9991 and 0.9993. `fig3` labels it as such. See `algorithm.md` §3.
    `humanoid_ensemble1` was the generalization test and it has now finished: the trend
    **reverses** there. That does not retract anything in this document, but it bounds
    what it generalises to — see
-   [`../humanoid_ensemble1/README.md`](../humanoid_ensemble1/README.md).
+   [`../humanoidmaze_navigate__depth_ensemble1/README.md`](../humanoidmaze_navigate__depth_ensemble1/README.md).
 
 ---
 
@@ -615,14 +615,14 @@ own contrastive objective with depth there, by the same margin as here.
 That grid moved three variables at once (dataset, `critic_ensemble` 2→1, `discount`
 0.99→0.995), so it does not isolate the environment, and the cheapest run that would —
 antmaze with `critic_ensemble: 1` at depths 4 and 32 — has not been done. Full write-up
-and the discriminating experiments: [`../humanoid_ensemble1/README.md`](../humanoid_ensemble1/README.md).
+and the discriminating experiments: [`../humanoidmaze_navigate__depth_ensemble1/README.md`](../humanoidmaze_navigate__depth_ensemble1/README.md).
 
 **Then: mechanistic interpretability on the trained critics.** The §6 result says a
 deeper critic is better, and §6.1 says we cannot tell from behaviour alone whether that
 is the critic or the actor. Probing the critic directly is the way past that, and we now
 have a depth ladder of checkpoints to probe — the same architecture at 4/8/16/32 trained
 on identical data. **The first of these has been run** — see
-[`../interp01/README.md`](../interp01/README.md), which finds the critic's value field
+[`../interp__critic_depth/README.md`](../interp__critic_depth/README.md), which finds the critic's value field
 becomes *less* aligned with true geodesic distance as depth rises (ρ 0.63 → 0.53 → 0.46)
 even as success rises. Starting points, in order:
 

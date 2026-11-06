@@ -15,6 +15,9 @@
 # retrieval FALLS with depth (0.150 -> 0.094) while training retrieval triples, which
 # is the signature of learning trajectory identity instead of a transferable value.
 #
+# Full depth ladder (4/8/16/32), matching phase1_repro, so the SHAPE of the curve is
+# comparable and not just its endpoints.
+#
 # ONE KNOB. Identical to `phase1_repro` except `dataset`. That needs an explicit
 # override, because `use_published_flags` would otherwise move a second thing:
 # OGBench publishes actor_p_trajgoal/randomgoal = 1.0/0.0 for navigate against 0.5/0.5
@@ -43,7 +46,7 @@ name: antmaze_navigate1
 dataset: antmaze-medium-navigate-v0     # <- the one deliberate change
 seeds: [0, 1, 2]
 agent: [crl]
-depth: [4, 32]
+depth: [4, 8, 16, 32]
 profile: ogbench               # binary_nce + dot + no penalty
 repr_dim: 64
 tower: residual

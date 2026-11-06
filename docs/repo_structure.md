@@ -308,7 +308,7 @@ experiment is a no-op diff; `--template` output == committed file.
 
 Extract `pipeline.py`; `run.py` and `eval.py` become subject definitions. Fold
 `--report` (currently eval-only) into the pipeline so experiments get the same
-AUTO-block results document that the evals now have — `results/phase1_repro/README.md` is
+AUTO-block results document that the evals now have — `results/antmaze_stitch__depth/README.md` is
 hand-maintained today and has already been wrong once (the `last3_mean` pin bug).
 
 *Verifies:* byte-identical `plan` output on all five experiments and the suite, captured
@@ -402,7 +402,7 @@ that does not exist yet is the same drift problem in a new place.
 2. **`--regenerate` semantics.** When a template changes, should regenerating an
    experiment preserve *every* key that differs from the template, or only keys listed
    in its `# generated-from:` header? The first is safer, the second is tidier.
-3. **Does `results/phase1_repro/README.md` become an AUTO-block document** (Stage 3)? It would stop
+3. **Does `results/antmaze_stitch__depth/README.md` become an AUTO-block document** (Stage 3)? It would stop
    the numbers drifting, at the cost of a one-time rewrite of a 651-line file that
    currently reads well. **Now more attractive than when first written:** updating it
    for depth 32 by hand meant eight separate edits to tables, a headline, a status

@@ -10,7 +10,7 @@ in our plumbing rather than in the architecture.
 
 **Full analysis — including whether the reproduction succeeded, the architecture
 inversion it exposed, and the shared environment description — is §1, §3 and §5 of
-[`../phase1_repro/README.md`](../phase1_repro/README.md).** That document covers both
+[`../antmaze_stitch__depth/README.md`](../antmaze_stitch__depth/README.md).** That document covers both
 grids; this folder holds the anchor's own figures so they sit beside the numbers they
 produced.
 

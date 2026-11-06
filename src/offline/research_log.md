@@ -468,7 +468,7 @@ goal distance. And CRL vs GCBC are **complementary, not ranked** -- CRL is stron
 exactly where GCBC fails (tasks 3, 4) and weakest on task 1, the long well-aligned route
 -- so a single aggregate success number on this dataset conveys very little.
 
-See [`results/phase1_repro/README.md`](../../results/phase1_repro/README.md) sections 1 and 6.
+See [`results/antmaze_stitch__depth/README.md`](../../results/antmaze_stitch__depth/README.md) sections 1 and 6.
 
 ---
 
@@ -841,9 +841,9 @@ is still the forced 180° detour. Two things change at once, deliberately: the b
 stitching is needed. A null here would be informative either way.
 **Next after this:** mechanistic interpretability on the depth ladder of critics —
 probe `ψ(g)` for maze cell / BFS distance, check whether `φ·ψ` is ordered like true
-distance, and look at per-block representational change. See `results/phase1_repro/README.md` §10.
+distance, and look at per-block representational change. See `results/antmaze_stitch__depth/README.md` §10.
 
-**Full write-up with figures and tables: [`results/phase1_repro/README.md`](../../results/phase1_repro/README.md).**
+**Full write-up with figures and tables: [`results/antmaze_stitch__depth/README.md`](../../results/antmaze_stitch__depth/README.md).**
 
 ---
 

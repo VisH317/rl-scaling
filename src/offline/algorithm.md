@@ -243,7 +243,7 @@ confound.
 | `p_aug`, frame stack | 0, none | same | |
 
 The first three rows are **open question Q1** and the likely reason our offline depth
-result disagrees with the paper's §4.6. See `results/phase1_repro/README.md` §2.6.
+result disagrees with the paper's §4.6. See `results/antmaze_stitch__depth/README.md` §2.6.
 
 ### Architecture
 
@@ -260,7 +260,7 @@ result disagrees with the paper's §4.6. See `results/phase1_repro/README.md` §
 | actor hidden dims | same tower as critic | `(512,512,512)` | | |
 
 `repr_dim` is **open question Q2**; it is currently unresolved and blocks attributing
-§7's architecture inversion in `results/phase1_repro/README.md`.
+§7's architecture inversion in `results/antmaze_stitch__depth/README.md`.
 
 ### Data and evaluation
 

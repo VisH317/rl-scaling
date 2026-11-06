@@ -66,9 +66,35 @@ EVALS_DOCS = os.path.join(OUTPUT_REPO, "src", "offline", "evals")
 RESULTS = os.path.join(OUTPUT_REPO, "results")
 
 
+#: Output-folder names for grids and eval suites.
+#:
+#: An ALIAS, not a rename. A run id is a hash over its config, and the grid name is
+#: part of that config, so renaming an experiment would change all of its run ids and
+#: orphan every finished run directory on scratch. The grid names therefore stay
+#: frozen forever; only the folder a human reads is renamed.
+#:
+#: The scheme is `<environment>__<what varies>`, so folders sort by environment and a
+#: name says what the experiment DOES rather than when it was run. "phase1_repro" had
+#: to be looked up; "antmaze_stitch__depth" does not.
+RESULTS_ALIAS = {
+    # grid name (frozen)      -> folder a human reads
+    "phase1_anchor":          "antmaze_stitch__baseline_arch",
+    "phase1_repro":           "antmaze_stitch__depth",
+    "antmaze_ensemble1":      "antmaze_stitch__depth_ensemble1",
+    "antmaze_navigate1":      "antmaze_navigate__depth",
+    "humanoid_ensemble1":     "humanoidmaze_navigate__depth_ensemble1",
+    "interp01":               "interp__critic_depth",
+}
+
+
+def results_name(name: str) -> str:
+    """The folder name for a grid or suite. Unaliased names pass through."""
+    return RESULTS_ALIAS.get(name, name)
+
+
 def results_dir(name: str) -> str:
-    """`results/<grid-or-suite>/`, created on demand."""
-    d = os.path.join(RESULTS, name)
+    """`results/<aliased name>/`, created on demand."""
+    d = os.path.join(RESULTS, results_name(name))
     os.makedirs(d, exist_ok=True)
     return d
 

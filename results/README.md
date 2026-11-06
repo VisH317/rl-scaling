@@ -1,130 +1,210 @@
 # Results — index
 
-Every finished experiment and eval suite, one folder each. A folder holds **its figures
-and the document that reads them**, so a figure is never separated from the sentence
-interpreting it.
+One folder per experiment or eval suite. Each holds **its figures and the document that
+reads them**, so a figure is never separated from the sentence interpreting it.
 
-Compiled 2026-11-06. 38 training runs finished, 0 in flight.
+Compiled 2026-11-06.
 
 ```
 results/
-  phase1_anchor/       6 runs   the reproduction control
-  phase1_repro/       24 runs   does depth help on antmaze?           <- the main result
-  humanoid_ensemble1/  8 runs   does it survive a new environment?    <- the reversal
-  interp01/           3 ckpts   what about the critic actually improves?
+  antmaze_stitch__baseline_arch/            6 runs   done     the reproduction control
+  antmaze_stitch__depth/                   24 runs   done     depth helps              <- main result
+  antmaze_stitch__depth_ensemble1/          6 runs   RUNNING  is it the ensemble?
+  antmaze_navigate__depth/                 12 runs   not run  is it the data?
+  humanoidmaze_navigate__depth_ensemble1/   8 runs   done     depth hurts              <- the reversal
+  interp__critic_depth/                    16 evals  done     what does the critic learn?
 ```
 
-Nothing in these documents is typed from terminal output: every table is read from the
-`.csv` beside the `.png`, and the eval documents fill themselves between `<!-- AUTO -->`
-markers. Regenerate with `python src/scripts/plot_results.py --grid <name>` (figures and
-tables) or `python src/eval.py --report` (eval suites).
+Folder names are `<environment>__<what varies>`. They are **aliases**, not renames: a
+run id is a hash over its config and the grid name is part of that config, so the grid
+names (`phase1_repro`, `humanoid_ensemble1`, …) are frozen forever and only the folder
+a human reads was renamed. The mapping is `rl_scaling/paths.py::RESULTS_ALIAS`.
+
+Nothing here is typed from terminal output. Every table is read from the `.csv` beside
+the `.png`; the eval documents fill themselves between `<!-- AUTO -->` markers.
+Regenerate with `python src/scripts/plot_results.py --grid <grid>` or
+`python src/eval.py --report`.
+
+---
+
+## How to read the numbers
+
+Three different success metrics appear throughout and they are **not interchangeable**.
+Every table below names which one it uses.
+
+| metric | what it scores | episodes | units |
+|---|---|---|---|
+| **`reeval@50`** | `params_best.pkl`, rescored after training | 50/task × 5 tasks = **250** | % of episodes reaching the goal, 0–100 |
+| `best_success` | the single best evaluation during training | 15/task × 5 = **75** | % of episodes, 0–100 |
+| `last3@1M` | mean of the final 3 evaluations, pinned to **1,000,000 gradient steps** | 15/task × 5 = **75**, ×3 | % of episodes, 0–100 |
+
+- **`reeval@50` is the headline.** It is the only one measured the way OGBench's
+  published table is, so it is the only one comparable to 53% (CRL) / 45% (GCBC).
+- `best_success` is a **max over ~20 noisy evaluations**, so it is biased upward.
+- `last3@1M` is where a run **settles**. The pin to a common step matters: the plateau
+  rule stops runs anywhere between 0.9M and 1.9M steps, so an unpinned last-3 would
+  measure every run at a different point on its own curve.
+- `reeval@50` and `best_success` both score the **best** checkpoint; `last3@1M` scores
+  the **end**. When a run degrades late those diverge, and that gap is itself a result
+  (see the humanoid grid).
+
+**± is one standard deviation across seeds**, not a standard error and not a confidence
+interval. With n = 2 or 3 it is a spread, not an inference.
+
+Other units used in the eval documents: **ρ** is a Spearman rank correlation,
+dimensionless in [−1, 1]. **R²** is fraction of variance explained against the test-set
+mean, dimensionless, ≤ 1 and free to go negative. **Q** is an unnormalised
+log-density-ratio in **logits** whose scale is arbitrary per run — comparable in sign
+and trend, never in level.
 
 ---
 
 ## The one-paragraph version
 
 **Depth helps a lot on one dataset and hurts on the other, and the critic's own metrics
-improve in both.** On `antmaze-medium-stitch` the contrastive critic scales strongly with
-depth — 34.1 → 79.3 across 4 → 32 layers, against OGBench's published 53% — and nearly
-all of that gain is one task, the forced 180° detour, going 0.13 → 0.93. On
-`humanoidmaze-medium-navigate` the same sweep runs **backwards**: 64.2 → 31.3, with the
-deep runs peaking at 200k steps and then losing half their score, and that same detour
-task never working at any depth. In both environments the critic gets monotonically
-*better* at its own contrastive objective as depth rises (categorical accuracy to 0.81
-and 0.86) while its held-out contrastive loss gets monotonically worse. And where the
-critic has been probed directly, its value field becomes *less* aligned with true
-distance-to-goal as depth rises, even while success rises.
+improve in both.** On `antmaze-medium-stitch` the contrastive critic scales strongly —
+`reeval@50` of 35.5 → 86.7 across 4 → 32 layers, against OGBench's published 53% — and
+nearly all of that gain is one task, the forced 180° detour, going 0.08 → 0.97. On
+`humanoidmaze-medium-navigate` the same sweep peaks at depth **8** and then falls, and
+where runs *settle* depth 32 collapses to 31.3. In both environments the critic gets
+monotonically **better** at its own training objective as depth rises, while its
+held-out contrastive loss gets monotonically worse. Probed directly, the deeper critic
+linearly encodes maze geometry *less* well, not more — on antmaze at depth 32 it is
+worse than an **untrained** network of the same depth — even as success rises.
 
-So depth is buying something real on antmaze, it is not buying "a better distance
-function", and whatever it buys does not transfer. **The caveat that governs everything
-above:** the two grids differ in three ways, not one, so they do not isolate the
-environment — [`humanoid_ensemble1/README.md`](humanoid_ensemble1/README.md) §4 names the
-4-run experiment that would.
+So depth is buying something real on antmaze; it is not buying "a better distance
+function"; and whatever it buys does not transfer. **The caveat governing all of it:**
+the two grids differ in **four** ways, not one, so they do not isolate the environment.
+Two of the four now have a dedicated experiment (below).
 
 ---
 
 ## Headline numbers
 
-Last-3-evaluation mean pinned to a common 1,000,000 gradient steps — the convention
-OGBench's table uses. Percent of episodes, ± 1 SD over seeds.
+**Metric: `reeval@50`** — best checkpoint, 250 episodes per point. Percent of episodes,
+± 1 SD over seeds. This is the comparable number.
 
-| depth | CRL antmaze (n=3) | GCBC antmaze (n=3) | CRL humanoid (n=2) |
+| depth | CRL antmaze-stitch (n=3) | GCBC antmaze-stitch (n=3) | CRL humanoidmaze-navigate (n=2) |
+|---|---|---|---|
+| 4 | 35.5 ± 9.4 | 54.3 ± 5.2 | 62.0 ± 1.2 |
+| 8 | 53.2 ± 4.3 | **65.5 ± 3.1** | **65.0 ± 1.0** |
+| 16 | 77.5 ± 7.6 | 64.0 ± 3.1 | 55.0 ± 5.8 |
+| 32 | **86.7 ± 2.9** | 60.5 ± 2.6 | 53.0 ± 7.0 |
+
+*Reference: OGBench publishes 53 ± 6 (CRL) and 45 ± 11 (GCBC) for antmaze-medium-stitch.
+There is no verified published number for humanoidmaze-medium-navigate, which is why its
+figures carry no reference band.*
+
+**Metric: `last3@1M`** — where runs settle, same layout.
+
+| depth | CRL antmaze-stitch | GCBC antmaze-stitch | CRL humanoidmaze-navigate |
 |---|---|---|---|
 | 4 | 34.1 ± 9.8 | 53.5 ± 6.8 | **64.2 ± 2.4** |
-| 8 | 49.3 ± 3.8 | 65.2 ± 1.6 | 63.3 ± 0.7 |
+| 8 | 49.3 ± 3.8 | **65.2 ± 1.6** | 63.3 ± 0.7 |
 | 16 | 71.4 ± 1.9 | 62.5 ± 2.4 | 54.4 ± 0.7 |
 | 32 | **79.3 ± 5.5** | 61.2 ± 5.5 | 31.3 ± 1.1 |
 
-Reference: OGBench publishes 53% (CRL) and 45% (GCBC) for this dataset.
+What the two tables together say:
 
-- **CRL antmaze rises throughout, decelerating:** +15.2, +22.1, +7.9 per doubling.
-- **GCBC antmaze saturates at depth 8** and drifts down after.
-- **CRL humanoid falls throughout,** and the fall is larger than the seed spread at
-  every depth.
-
-`reeval@50` — the best checkpoint rescored at OGBench's published 50 episodes/task, and
-the only number strictly comparable to their table — is in each folder's
-`reeval_50ep.json`. It is currently being re-measured for the two grids that gained runs
-(jobs `2995117`, `2995118`); the shape held the last time it was checked
-(34.3 → 54.7 → 78.4 for CRL antmaze).
+- **CRL antmaze rises throughout** on both metrics, decelerating on `last3@1M`
+  (+15.2, +22.1, +7.9 per doubling) but still gaining +9.2 at the last step on
+  `reeval@50`.
+- **GCBC antmaze saturates at depth 8** and drifts down after, on both.
+- **CRL humanoid peaks at depth 8**, not 4, then falls — and the two metrics disagree
+  about *how far*. Depth 32 reaches 53.0 from its best checkpoint but settles at 31.3,
+  a **21.7-point gap no other cell in either grid shows** (every other is within ±2.2).
+  Its failure is mostly *failing to stay*, not failing to learn.
 
 ---
 
 ## Every figure
 
-Each row is one PNG plus the CSV it was drawn from. The same six grid figures exist for
-all three training grids.
+Each row is one PNG plus the CSV it was drawn from. The same six figures exist for all
+three training grids.
 
-### Training grids — `phase1_repro`, `phase1_anchor`, `humanoid_ensemble1`
+### Training grids
 
 | figure | what it answers | read it for |
 |---|---|---|
-| `fig1_success_vs_depth` | max-over-evaluations vs depth, per agent | the optimistic view; a max over ~20 noisy points |
-| `fig1b_last3_vs_depth` | the published metric, pinned to a common step | **the headline** |
+| `fig1_success_vs_depth` | `best_success` vs depth, per agent | the optimistic view; a max over ~20 noisy points |
+| `fig1b_last3_vs_depth` | `last3@1M` vs depth | where runs settle |
 | `fig2_learning_curves` | success vs gradient steps, depth as a colour ramp | *when* a run peaks — the humanoid story is here |
-| `fig3_critic_diagnostics` | train vs validation contrastive loss, categorical accuracy | the overfitting that depth causes in both environments |
-| `fig4_cost` | params, throughput, wall clock | so depth is never read without its price |
+| `fig3_critic_diagnostics` | train vs validation contrastive loss, categorical accuracy | the overfitting depth causes in both environments |
+| `fig4_cost` | parameters, throughput, wall clock | so depth is never read without its price |
 | `fig6_per_task` | the 5 tasks × configs heatmap | what the aggregate hides — task 4 above all |
 | `fig5_depth_data_heatmap` | not generated; needs >1 dataset size (phase 3) | — |
 
-### `interp01` — the critic, probed directly
+### `interp__critic_depth`
+
+Figures are written **one complete set per environment**, suffixed
+`__phase1_repro` / `__humanoid_ensemble1`, because `Q`'s scale is arbitrary per run and
+the two environments must not share a colour scale or a panel.
 
 | figure | what it answers |
 |---|---|
-| `fig1_critic_field` | the value field on the real maze, depth × task |
-| `fig2_topology` | does the field follow the maze (geodesic) or ignore it (straight-line)? |
-| `fig3_advantage_field` | Q(policy) − Q(dataset); **appears only once `dataset` is an action source** |
+| `fig1_critic_field` | the value field drawn on the real maze, depth × task |
+| `fig2_topology` | does the field follow the maze (geodesic) or ignore walls (straight-line)? |
+| `fig3_advantage_field` | Q(policy action) − Q(dataset action), per bin |
 | `fig4_metrics` | where the field peaks, and whether it climbs along the path |
 | `fig5_action_preference` | which of two real expert actions the critic prefers, per bin |
 | `fig6_action_tests` | `action_topology_gain` and `oracle_gap` vs depth |
+| `fig1_probe_vs_depth` | linear probe R² vs depth, per target, with both controls |
+| `fig2_probe_vs_heatmap` | probe R² against the same checkpoint's field ordering |
 
 ---
 
 ## What each folder is
 
-### [`phase1_repro/`](phase1_repro/) — the main result · 24 runs
-CRL and GCBC on the residual tower from the 1000-layer paper, depths 4/8/16/32, 3 seeds,
-`antmaze-medium-stitch-v0`. 651 lines, and the most careful document here: it covers the
-environment, the five tasks, the maze geometry that predicts the results, and §2's full
-accounting of **where we differ from the paper** — we run binary NCE on dot products
-where they run InfoNCE on negative L2 with a logsumexp penalty, and their offline result
-is negative where ours is positive. Read §2 before quoting §6.
+### [`antmaze_stitch__depth/`](antmaze_stitch__depth/) — the main result · 24 runs · **done**
+*(grid `phase1_repro`)* CRL and GCBC on the residual tower from the 1000-layer paper,
+depths 4/8/16/32, 3 seeds, `antmaze-medium-stitch-v0`. The most careful document here:
+the environment, the five tasks, the maze geometry that predicts the results, and §2's
+accounting of where this setup differs from the paper. Read §2 before quoting §6.
 
-### [`humanoid_ensemble1/`](humanoid_ensemble1/) — the reversal · 8 runs
-The same sweep on `humanoidmaze-medium-navigate-v0` with a single critic encoder pair.
-Depth hurts, monotonically. Documents the three-way confound that stops this from being
-a clean environment comparison, and names the 4-run experiments that would resolve it.
+### [`humanoidmaze_navigate__depth_ensemble1/`](humanoidmaze_navigate__depth_ensemble1/) — the reversal · 8 runs · **done**
+*(grid `humanoid_ensemble1`)* The same sweep on `humanoidmaze-medium-navigate-v0` with a
+single critic encoder pair. Depth stops paying. Documents the four-way confound that
+stops this being a clean environment comparison, and the full critic analysis.
 
-### [`phase1_anchor/`](phase1_anchor/) — the control · 6 runs
-Stock OGBench architecture, unmodified, depth 4. Exists so that a miss means the harness
-is wrong rather than the idea. Its analysis lives in `phase1_repro`'s §5.
+### [`antmaze_stitch__baseline_arch/`](antmaze_stitch__baseline_arch/) — the control · 6 runs · **done**
+*(grid `phase1_anchor`)* Stock OGBench architecture, unmodified, depth 4. Exists so that
+a miss means the harness is wrong rather than the idea.
 
-### [`interp01/`](interp01/) — critic interpretability · 3 checkpoints
-The first eval suite. Takes the best seed at each depth and measures what about
-`Q(s, a, g)` improves: whether the value field is ordered like geodesic distance, which
-of two real expert actions the critic prefers where they disagree, and whether the
-actor's own action beats the maze-correct one under its own critic. **Currently being
-re-run across all four depths** (job `2995119`) now that depth 32 exists.
+### [`interp__critic_depth/`](interp__critic_depth/) — critic interpretability · 16 evals · **done**
+*(suite `interp01`)* `critic_heatmap` and `state_probes`, each on the best seed at every
+depth, on **both** environments. Asks what about `Q(s,a,g)` actually improves with
+depth. The answer is not "it becomes a better distance function".
+
+### `antmaze_stitch__depth_ensemble1/` — **running** (`2995193`) · 6 runs
+*(grid `antmaze_ensemble1`)* `phase1_repro` with `critic_ensemble: 2 → 1` and nothing
+else, verified by a resolved-config diff. Tests whether the depth result depended on
+having two critics — the actor maximises `min` over the ensemble, so at size 1 there is
+no pessimism at all.
+
+### `antmaze_navigate__depth/` — **not submitted** · 12 runs · 136 GPU-h
+*(grid `antmaze_navigate1`)* `phase1_repro` with the dataset changed to
+`antmaze-medium-navigate-v0` and nothing else. Tests whether the reversal is about the
+**data** rather than the body: navigate has 1000 trajectories × 1001 steps against
+stitch's 5000 × 201, which is humanoid's structure with the ant's 29-d observation.
+
+---
+
+## The four-way confound, and what covers it
+
+`phase1_repro` → `humanoid_ensemble1` moved four things at once:
+
+| difference | | | covered by |
+|---|---|---|---|
+| dataset | stitch | navigate | `antmaze_navigate__depth` (not yet run) |
+| `critic_ensemble` | 2 | 1 | `antmaze_stitch__depth_ensemble1` (running) |
+| `actor_p_trajgoal / randomgoal` | 0.5 / 0.5 | 1.0 / 0.0 | **nothing yet** |
+| `discount` | 0.99 | 0.995 | **nothing yet** |
+
+The third was found late and may matter most: `p_randomgoal = 0` means the actor is
+**never trained on out-of-trajectory goals**, which is exactly the stitching capability
+— and task 4, the task that needs it, never works on humanoid at any depth. Both
+uncovered differences arrive through `use_published_flags`, which applies OGBench's
+published command for whichever dataset is named.
 
 ---
 
@@ -132,12 +212,12 @@ re-run across all four depths** (job `2995119`) now that depth 32 exists.
 
 | what | why it matters | cost |
 |---|---|---|
-| `critic_ensemble: 1` on antmaze, d4 + d32 | the cheapest run that would un-confound the reversal | 4 runs |
-| `interp01` on `humanoid_ensemble1` | does the *worse*-controlling critic have a *better*-ordered field? | 4 evals |
-| `state_probes` | what `ψ(g)` linearly encodes; designed, not implemented | — |
-| `q1_loss_pilot` | whether the loss form explains the disagreement with the paper's §4.6 | 4 runs, ~26 GPU-h |
-| `scaling_crl_replication` | the paper's own setting | — |
+| `actor_p_randomgoal` at 0.5 on humanoid | the uncovered confound most likely to matter | 4 runs |
+| early-stop humanoid d32 at its 200k peak | tests whether the collapse is just training too long; checkpoints already exist | free |
+| `interp01` on `antmaze_ensemble1` / `antmaze_navigate1` | the probes on the disambiguation grids | 8 evals |
+| `state_probes` at `block_k` | per-block representational change; needs activation capture | — |
+| `q1_loss_pilot`, `scaling_crl_replication` | **deprioritised** — the paper's contribution is the architecture, and its energy function is believed to be a dot product, so the loss-form difference may not be a real deviation | — |
 
-Research context, open questions and the verified-facts log live in
+Research context and the verified-facts log live in
 [`../src/offline/`](../src/offline/): `offline_exp.md` (the brief), `algorithm.md` (what
 actually runs), `research_log.md` (verified facts), `impl_log.md` (what was built).
