@@ -1,0 +1,210 @@
+[
+  {
+    "run_id": "humanoid_ensemble1__crl__d16__n1000000__s0__a548fd8f",
+    "grid": "humanoid_ensemble1",
+    "agent": "crl",
+    "depth": 16,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.492,
+    "reeval_per_task": {
+      "task1": 0.74,
+      "task2": 0.74,
+      "task3": 0.26,
+      "task4": 0.0,
+      "task5": 0.72
+    },
+    "train_best_success": 0.6133333333333333,
+    "last3_eval_mean": 0.5378,
+    "last3_evals": [
+      0.4667,
+      0.5867,
+      0.56
+    ],
+    "reeval_secs": 580.5
+  },
+  {
+    "run_id": "humanoid_ensemble1__crl__d16__n1000000__s1__a7dcc884",
+    "grid": "humanoid_ensemble1",
+    "agent": "crl",
+    "depth": 16,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.608,
+    "reeval_per_task": {
+      "task1": 0.74,
+      "task2": 0.68,
+      "task3": 0.62,
+      "task4": 0.16,
+      "task5": 0.84
+    },
+    "train_best_success": 0.6799999999999999,
+    "last3_eval_mean": 0.5378,
+    "last3_evals": [
+      0.56,
+      0.5867,
+      0.4667
+    ],
+    "reeval_secs": 553.0
+  },
+  {
+    "run_id": "humanoid_ensemble1__crl__d32__n1000000__s0__d1da46a4",
+    "grid": "humanoid_ensemble1",
+    "agent": "crl",
+    "depth": 32,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.46,
+    "reeval_per_task": {
+      "task1": 0.74,
+      "task2": 0.44,
+      "task3": 0.36,
+      "task4": 0.2,
+      "task5": 0.56
+    },
+    "train_best_success": 0.6,
+    "last3_eval_mean": 0.3022,
+    "last3_evals": [
+      0.2667,
+      0.3067,
+      0.3333
+    ],
+    "reeval_secs": 880.1
+  },
+  {
+    "run_id": "humanoid_ensemble1__crl__d32__n1000000__s1__9ca3fb59",
+    "grid": "humanoid_ensemble1",
+    "agent": "crl",
+    "depth": 32,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.6,
+    "reeval_per_task": {
+      "task1": 0.84,
+      "task2": 0.62,
+      "task3": 0.52,
+      "task4": 0.28,
+      "task5": 0.74
+    },
+    "train_best_success": 0.6,
+    "last3_eval_mean": 0.3244,
+    "last3_evals": [
+      0.3733,
+      0.2667,
+      0.3333
+    ],
+    "reeval_secs": 809.4
+  },
+  {
+    "run_id": "humanoid_ensemble1__crl__d4__n1000000__s0__afee9b28",
+    "grid": "humanoid_ensemble1",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.608,
+    "reeval_per_task": {
+      "task1": 0.92,
+      "task2": 0.86,
+      "task3": 0.48,
+      "task4": 0.0,
+      "task5": 0.78
+    },
+    "train_best_success": 0.6933333333333334,
+    "last3_eval_mean": 0.5956,
+    "last3_evals": [
+      0.5733,
+      0.64,
+      0.5733
+    ],
+    "reeval_secs": 347.1
+  },
+  {
+    "run_id": "humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09",
+    "grid": "humanoid_ensemble1",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.632,
+    "reeval_per_task": {
+      "task1": 0.9,
+      "task2": 0.88,
+      "task3": 0.58,
+      "task4": 0.02,
+      "task5": 0.78
+    },
+    "train_best_success": 0.7466666666666667,
+    "last3_eval_mean": 0.6044,
+    "last3_evals": [
+      0.6133,
+      0.6133,
+      0.5867
+    ],
+    "reeval_secs": 335.9
+  },
+  {
+    "run_id": "humanoid_ensemble1__crl__d8__n1000000__s0__a857e3c3",
+    "grid": "humanoid_ensemble1",
+    "agent": "crl",
+    "depth": 8,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.66,
+    "reeval_per_task": {
+      "task1": 0.88,
+      "task2": 0.76,
+      "task3": 0.38,
+      "task4": 0.36,
+      "task5": 0.92
+    },
+    "train_best_success": 0.7066666666666667,
+    "last3_eval_mean": 0.6089,
+    "last3_evals": [
+      0.6533,
+      0.5867,
+      0.5867
+    ],
+    "reeval_secs": 392.6
+  },
+  {
+    "run_id": "humanoid_ensemble1__crl__d8__n1000000__s1__a963cbb2",
+    "grid": "humanoid_ensemble1",
+    "agent": "crl",
+    "depth": 8,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.64,
+    "reeval_per_task": {
+      "task1": 0.86,
+      "task2": 0.92,
+      "task3": 0.34,
+      "task4": 0.16,
+      "task5": 0.92
+    },
+    "train_best_success": 0.6666666666666667,
+    "last3_eval_mean": 0.6133,
+    "last3_evals": [
+      0.5733,
+      0.6267,
+      0.64
+    ],
+    "reeval_secs": 389.7
+  }
+]

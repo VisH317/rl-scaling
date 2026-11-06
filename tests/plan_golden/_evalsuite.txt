@@ -1,29 +1,43 @@
-interp01   (/home/vt7993/rl-scaling-refactor/src/offline/evals/evals.yaml)
-  grids     ['phase1_repro']   agents ['crl']   depths [4, 8, 16, 32]
+interp01   (<repo>/src/offline/evals/evals.yaml)
+  grids     ['phase1_repro', 'humanoid_ensemble1']   agents ['crl']   depths [4, 8, 16, 32]
   select    reeval  checkpoint=<sel>
-  output    /scratch/gpfs/vt7993/rl-scaling/experiments/analysis/evals/interp01
-  tasks     3
+  output    <scratch>/rl-scaling/experiments/analysis/evals/interp01
+  tasks     16
 
   eval               d seed   select  rule              spread  run_id
-  critic_heatmap     4    1    0.444  reeval@50          0.236  phase1_repro__crl__d4__n1000000__s1__acdde8ae
-  critic_heatmap     8    2    0.580  reeval@50          0.064  phase1_repro__crl__d8__n1000000__s2__43511f71
-  critic_heatmap    16    2    0.904  reeval@50          0.184  phase1_repro__crl__d16__n1000000__s2__c674fc85
+  critic_heatmap     4    1    0.452  reeval@50          0.224  phase1_repro__crl__d4__n1000000__s1__acdde8ae
+  critic_heatmap     8    2    0.568  reeval@50          0.096  phase1_repro__crl__d8__n1000000__s2__43511f71
+  critic_heatmap    16    2    0.880  reeval@50          0.176  phase1_repro__crl__d16__n1000000__s2__c674fc85
+  critic_heatmap    32    1    0.904  reeval@50          0.072  phase1_repro__crl__d32__n1000000__s1__1e7813ba
+  critic_heatmap     4    1    0.632  reeval@50          0.024  humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09
+  critic_heatmap     8    0    0.660  reeval@50          0.020  humanoid_ensemble1__crl__d8__n1000000__s0__a857e3c3
+  critic_heatmap    16    1    0.608  reeval@50          0.116  humanoid_ensemble1__crl__d16__n1000000__s1__a7dcc884
+  critic_heatmap    32    1    0.600  reeval@50          0.140  humanoid_ensemble1__crl__d32__n1000000__s1__9ca3fb59
+  state_probes       4    1    0.452  reeval@50          0.224  phase1_repro__crl__d4__n1000000__s1__acdde8ae
+  state_probes       8    2    0.568  reeval@50          0.096  phase1_repro__crl__d8__n1000000__s2__43511f71
+  state_probes      16    2    0.880  reeval@50          0.176  phase1_repro__crl__d16__n1000000__s2__c674fc85
+  state_probes      32    1    0.904  reeval@50          0.072  phase1_repro__crl__d32__n1000000__s1__1e7813ba
+  state_probes       4    1    0.632  reeval@50          0.024  humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09
+  state_probes       8    0    0.660  reeval@50          0.020  humanoid_ensemble1__crl__d8__n1000000__s0__a857e3c3
+  state_probes      16    1    0.608  reeval@50          0.116  humanoid_ensemble1__crl__d16__n1000000__s1__a7dcc884
+  state_probes      32    1    0.600  reeval@50          0.140  humanoid_ensemble1__crl__d32__n1000000__s1__9ca3fb59
 
   seeds not picked (the spread is as real as the depth effect):
-    d4   {'1': 0.444, '0': 0.376, '2': 0.208}
-    d8   {'2': 0.58, '0': 0.544, '1': 0.516}
-    d16  {'2': 0.904, '0': 0.728, '1': 0.72}
-
-  not run:
-    critic_heatmap: phase1_repro crl d32 -- no scorable run
-    state_probes: disabled in evals.yaml
+    d4   {'1': 0.452, '0': 0.384, '2': 0.228}
+    d8   {'2': 0.568, '0': 0.556, '1': 0.472}
+    d16  {'2': 0.88, '1': 0.74, '0': 0.704}
+    d32  {'1': 0.904, '2': 0.864, '0': 0.832}
+    d4   {'1': 0.632, '0': 0.608}
+    d8   {'0': 0.66, '1': 0.64}
+    d16  {'1': 0.608, '0': 0.492}
+    d32  {'1': 0.6, '0': 0.46}
 
   cost      <cost>
-            Job wall limit 03:00:00 = 3 x the longest eval's cap. That is a CAP, not an estimate;
+            Job wall limit 16:00:00 = 16 x the longest eval's cap. That is a CAP, not an estimate;
             each task records its real `secs` in meta.json, which is what to calibrate from.
 
   evals on disk:
     [x] critic_heatmap   ready    Critic value field over the maze, under the policy's own action
-    [ ] state_probes     planned  What the critic's representations linearly encode about the state
+    [x] state_probes     ready    What the critic's representations linearly encode about the state
 
 (nothing written -- add --write to generate task files, --submit to also queue)

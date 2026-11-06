@@ -1,4 +1,4 @@
-humanoid_ensemble1   (/home/vt7993/rl-scaling-refactor/experiments/humanoid_ensemble1.yaml)
+humanoid_ensemble1   (<repo>/experiments/humanoid_ensemble1.yaml)
   dataset   humanoidmaze-medium-navigate-v0  size 1,000,000
   axes      agent=['crl']  depth=[4, 8, 16, 32]
   seeds     [0, 1]

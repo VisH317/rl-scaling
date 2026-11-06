@@ -6,16 +6,28 @@ Compiled 2026-11-06. **8 of 8 runs finished** (CRL, depths 4/8/16/32, 2 seeds ea
 Figures are in this folder, PNG + CSV. Every number below is read from those CSVs; the
 tables are not typed from terminal output.
 
-> **Headline: the depth result reverses here.** On `antmaze-medium-stitch`, CRL success
-> rose monotonically with depth (42.7 → 87.1 best-eval, 4 → 32 layers). On
-> `humanoidmaze-medium-navigate` it *falls* monotonically: **72.0 → 68.7 → 64.7 → 60.0**
-> best-eval, and **64.2 → 63.3 → 54.4 → 31.3** on the settled metric. The decline is
-> larger than the seed spread at every depth.
+> **Headline: the depth result reverses here.** On `antmaze-medium-stitch`, CRL rises
+> with depth on every metric — 35.5 → 86.7 at the published 50 episodes/task. On
+> `humanoidmaze-medium-navigate` it does not:
 >
-> **And the critic is not what fails.** The critic gets monotonically *better* at its own
-> objective with depth, in both environments and by roughly the same margin — categorical
-> accuracy 30.4 → 86.3 here vs 36.9 → 80.9 on antmaze. Depth buys the same amount of
-> critic, and the control it buys flips sign.
+> | metric | d4 | d8 | d16 | d32 |
+> |---|---|---|---|---|
+> | **`reeval@50`** (best checkpoint, 250 ep) | 62.0 | **65.0** | 55.0 | 53.0 |
+> | `best_success` (best checkpoint, 75 ep) | **72.0** | 68.7 | 64.7 | 60.0 |
+> | `last3@1M` (where it settles, 75 ep) | **64.2** | 63.3 | 54.4 | **31.3** |
+>
+> **The three metrics disagree, and that disagreement is the finding.** On the headline
+> metric the peak is at depth *8*, not 4, and depth 32 still reaches 53% — this is a
+> 12-point decline from peak, not a collapse. On where the runs *settle*, depth 32 is
+> at 31.3%. Depth 32 is the only cell in either grid whose final score falls far below
+> its own best checkpoint (−21.7 points; every other cell is within ±2.2). So what
+> depth does here is not mainly "learn worse" — it is **fail to stay**.
+>
+> **And the critic is not what fails — on its training objective.** Training retrieval
+> accuracy rises monotonically with depth, in both environments and by a similar margin
+> (30.4 → 86.3 here, 36.9 → 80.9 on antmaze). But **held-out** retrieval moves the other
+> way here: 0.150 → 0.094, a 37% fall, where antmaze's holds flat at ~0.10. §3.1 is the
+> detail, and it is the sharpest single contrast between the two grids.
 >
 > **Read §4 before quoting any of this.** This grid differs from `phase1_repro` in
 > **three** ways, not one, so it does not isolate the environment.
@@ -62,6 +74,20 @@ Two more differences worth holding, because they cut the other way:
 
 ![success vs depth](fig1_success_vs_depth.png)
 
+`reeval_50ep.json` — best checkpoint rescored at OGBench's published 50 episodes/task
+(250 per point), the only numbers comparable to their table:
+
+| depth | n | mean | SD | seeds |
+|---|---|---|---|---|
+| 4 | 2 | 62.0 | 1.2 | 63.2, 60.8 |
+| 8 | 2 | **65.0** | 1.0 | 66.0, 64.0 |
+| 16 | 2 | 55.0 | 5.8 | 60.8, 49.2 |
+| 32 | 2 | 53.0 | 7.0 | 60.0, 46.0 |
+
+Note the seed spread widening with depth — ±1.0 at depth 8, ±7.0 at depth 32. The two
+depth-32 seeds differ by 14 points, so the depth-16-vs-32 difference is not resolvable
+with 2 seeds.
+
 `fig1_success_vs_depth.csv`, max over evaluations, 15 episodes/task × 5 tasks:
 
 | depth | n | mean | SD | seeds |
@@ -103,9 +129,23 @@ From each run's `summary.json`, the step at which the best evaluation occurred:
 
 Depth 32 reaches its best score at 200k steps — one fifth of the way in — and then loses
 half of it. Depth 4 peaks at 1.3M and holds. **The peak moves earlier as depth
-increases, and the collapse after it gets worse.** This is why the two metrics disagree:
-`best_success` is a max over evaluations and so reports the pre-collapse peak, while
-last3 reports where the run actually ended up.
+increases, and the fall after it gets worse.** This is why the metrics disagree:
+`best_success` and `reeval@50` both score `params_best`, i.e. the pre-collapse peak,
+while last3 reports where the run actually ended up.
+
+The gap between those two is the cleanest single number in this grid:
+
+| depth | `reeval@50` (best ckpt) | `last3@1M` (settled) | gap |
+|---|---|---|---|
+| 4 | 62.0 | 64.2 | −2.2 |
+| 8 | 65.0 | 63.3 | +1.7 |
+| 16 | 55.0 | 54.4 | +0.6 |
+| 32 | 53.0 | 31.3 | **+21.7** |
+
+Only depth 32 ends far below its own best checkpoint. That is a training-stability
+failure, not a capacity failure, and it is the one finding here with an immediate cheap
+remedy: **early-stop at the peak.** The checkpoints already exist, so that costs nothing
+to check.
 
 Every run stopped on `plateau`, not on the step cap, and `plateau_min_steps` is
 1,000,000 — so each deep run was *required* to keep training for ~800k steps past its
@@ -171,6 +211,29 @@ endpoint depths are needed to establish the sign.
 ## 5. Per task
 
 ![per task](fig6_per_task.png)
+
+`reeval_50ep.json`, best checkpoint, 50 episodes/task — and this is the table to read,
+because at 15 episodes a single task's score moves in steps of 0.067:
+
+| depth | task 1 | task 2 | task 3 | **task 4** | task 5 |
+|---|---|---|---|---|---|
+| 4 | 0.910 | 0.870 | 0.530 | **0.010** | 0.780 |
+| 8 | 0.870 | 0.840 | 0.360 | **0.260** | 0.920 |
+| 16 | 0.740 | 0.710 | 0.440 | **0.080** | 0.780 |
+| 32 | 0.790 | 0.530 | 0.440 | **0.240** | 0.650 |
+
+Against antmaze CRL on the same metric, where task 4 is the whole story:
+
+| depth | task 1 | task 2 | task 3 | **task 4** | task 5 |
+|---|---|---|---|---|---|
+| 4 | 0.167 | 0.553 | 0.773 | **0.080** | 0.200 |
+| 8 | 0.060 | 0.067 | 0.907 | **0.687** | 0.940 |
+| 16 | 0.493 | 0.753 | 0.900 | **0.827** | 0.900 |
+| 32 | 0.660 | 0.767 | 0.960 | **0.973** | 0.973 |
+
+**Task 4 — the forced 180° detour — goes 0.08 → 0.97 with depth on antmaze and never
+exceeds 0.26 on humanoid at any depth.** That one row is the reversal in its sharpest
+form: the capability depth buys on antmaze is exactly the one it never buys here.
 
 `fig6_per_task.csv`, best checkpoint, 15 episodes/task:
 

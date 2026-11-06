@@ -1,4 +1,12 @@
 {
+  "antmaze_ensemble1": [
+    "antmaze_ensemble1__crl__d4__n1000000__s0__c0321ced",
+    "antmaze_ensemble1__crl__d4__n1000000__s1__726072c7",
+    "antmaze_ensemble1__crl__d4__n1000000__s2__32b3b004",
+    "antmaze_ensemble1__crl__d32__n1000000__s0__97de01c2",
+    "antmaze_ensemble1__crl__d32__n1000000__s1__9823ab23",
+    "antmaze_ensemble1__crl__d32__n1000000__s2__fad3e88b"
+  ],
   "humanoid_ensemble1": [
     "humanoid_ensemble1__crl__d4__n1000000__s0__afee9b28",
     "humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09",

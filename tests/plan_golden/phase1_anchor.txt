@@ -1,4 +1,4 @@
-phase1_anchor   (/home/vt7993/rl-scaling-refactor/experiments/phase1_anchor.yaml)
+phase1_anchor   (<repo>/experiments/phase1_anchor.yaml)
   dataset   antmaze-medium-stitch-v0  size 1,000,000
   axes      agent=['crl', 'gcbc']  depth=[4]
   seeds     [0, 1, 2]

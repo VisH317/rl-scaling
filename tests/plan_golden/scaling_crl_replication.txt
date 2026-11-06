@@ -1,4 +1,4 @@
-scaling_crl_replication   (/home/vt7993/rl-scaling-refactor/experiments/scaling_crl_replication.yaml)
+scaling_crl_replication   (<repo>/experiments/scaling_crl_replication.yaml)
   dataset   antmaze-medium-stitch-v0  size 1,000,000
   axes      agent=['crl']  depth=[4, 8, 16, 32]
   seeds     [0, 1, 2]

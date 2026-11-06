@@ -8,13 +8,13 @@
     "seed": 0,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.728,
+    "reeval_success": 0.704,
     "reeval_per_task": {
-      "task1": 0.28,
-      "task2": 0.84,
-      "task3": 0.78,
-      "task4": 0.92,
-      "task5": 0.82
+      "task1": 0.34,
+      "task2": 0.6,
+      "task3": 0.86,
+      "task4": 0.88,
+      "task5": 0.84
     },
     "train_best_success": 0.8266666666666668,
     "last3_eval_mean": 0.7156,
@@ -23,7 +23,7 @@
       0.6,
       0.8267
     ],
-    "reeval_secs": 212.7
+    "reeval_secs": 212.9
   },
   {
     "run_id": "phase1_repro__crl__d16__n1000000__s1__5ac42ece",
@@ -34,13 +34,13 @@
     "seed": 1,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.72,
+    "reeval_success": 0.74,
     "reeval_per_task": {
-      "task1": 0.36,
-      "task2": 0.84,
-      "task3": 0.9,
-      "task4": 0.54,
-      "task5": 0.96
+      "task1": 0.44,
+      "task2": 0.7,
+      "task3": 0.94,
+      "task4": 0.7,
+      "task5": 0.92
     },
     "train_best_success": 0.8,
     "last3_eval_mean": 0.6889,
@@ -49,7 +49,7 @@
       0.8,
       0.6133
     ],
-    "reeval_secs": 211.4
+    "reeval_secs": 207.5
   },
   {
     "run_id": "phase1_repro__crl__d16__n1000000__s2__c674fc85",
@@ -60,11 +60,11 @@
     "seed": 2,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.904,
+    "reeval_success": 0.88,
     "reeval_per_task": {
       "task1": 0.7,
-      "task2": 1.0,
-      "task3": 0.98,
+      "task2": 0.96,
+      "task3": 0.9,
       "task4": 0.9,
       "task5": 0.94
     },
@@ -75,7 +75,85 @@
       0.7333,
       0.6133
     ],
-    "reeval_secs": 149.2
+    "reeval_secs": 151.5
+  },
+  {
+    "run_id": "phase1_repro__crl__d32__n1000000__s0__1f847ae3",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 32,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.832,
+    "reeval_per_task": {
+      "task1": 0.74,
+      "task2": 0.5,
+      "task3": 0.96,
+      "task4": 0.98,
+      "task5": 0.98
+    },
+    "train_best_success": 0.8266666666666668,
+    "last3_eval_mean": 0.7244,
+    "last3_evals": [
+      0.8267,
+      0.6533,
+      0.6933
+    ],
+    "reeval_secs": 245.9
+  },
+  {
+    "run_id": "phase1_repro__crl__d32__n1000000__s1__1e7813ba",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 32,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.904,
+    "reeval_per_task": {
+      "task1": 0.66,
+      "task2": 0.94,
+      "task3": 0.94,
+      "task4": 0.98,
+      "task5": 1.0
+    },
+    "train_best_success": 0.8800000000000001,
+    "last3_eval_mean": 0.8356,
+    "last3_evals": [
+      0.8667,
+      0.88,
+      0.76
+    ],
+    "reeval_secs": 210.0
+  },
+  {
+    "run_id": "phase1_repro__crl__d32__n1000000__s2__c92f51af",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 32,
+    "tower": "residual",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.864,
+    "reeval_per_task": {
+      "task1": 0.58,
+      "task2": 0.86,
+      "task3": 0.98,
+      "task4": 0.96,
+      "task5": 0.94
+    },
+    "train_best_success": 0.9066666666666666,
+    "last3_eval_mean": 0.8089,
+    "last3_evals": [
+      0.8267,
+      0.7733,
+      0.8267
+    ],
+    "reeval_secs": 231.2
   },
   {
     "run_id": "phase1_repro__crl__d4__n1000000__s0__b83f1e8b",
@@ -86,13 +164,13 @@
     "seed": 0,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.376,
+    "reeval_success": 0.384,
     "reeval_per_task": {
-      "task1": 0.0,
-      "task2": 0.74,
-      "task3": 0.72,
-      "task4": 0.1,
-      "task5": 0.32
+      "task1": 0.02,
+      "task2": 0.84,
+      "task3": 0.58,
+      "task4": 0.18,
+      "task5": 0.3
     },
     "train_best_success": 0.52,
     "last3_eval_mean": 0.4178,
@@ -101,7 +179,7 @@
       0.3733,
       0.52
     ],
-    "reeval_secs": 208.5
+    "reeval_secs": 218.1
   },
   {
     "run_id": "phase1_repro__crl__d4__n1000000__s1__acdde8ae",
@@ -112,11 +190,11 @@
     "seed": 1,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.444,
+    "reeval_success": 0.452,
     "reeval_per_task": {
-      "task1": 0.42,
-      "task2": 0.86,
-      "task3": 0.94,
+      "task1": 0.46,
+      "task2": 0.82,
+      "task3": 0.98,
       "task4": 0.0,
       "task5": 0.0
     },
@@ -127,7 +205,7 @@
       0.4133,
       0.4667
     ],
-    "reeval_secs": 191.6
+    "reeval_secs": 196.5
   },
   {
     "run_id": "phase1_repro__crl__d4__n1000000__s2__9ad8e9d4",
@@ -138,13 +216,13 @@
     "seed": 2,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.208,
+    "reeval_success": 0.228,
     "reeval_per_task": {
-      "task1": 0.0,
-      "task2": 0.02,
-      "task3": 0.66,
-      "task4": 0.14,
-      "task5": 0.22
+      "task1": 0.02,
+      "task2": 0.0,
+      "task3": 0.76,
+      "task4": 0.06,
+      "task5": 0.3
     },
     "train_best_success": 0.2666666666666667,
     "last3_eval_mean": 0.1911,
@@ -153,7 +231,7 @@
       0.2133,
       0.1867
     ],
-    "reeval_secs": 241.4
+    "reeval_secs": 242.5
   },
   {
     "run_id": "phase1_repro__crl__d8__n1000000__s0__f813301a",
@@ -164,13 +242,13 @@
     "seed": 0,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.544,
+    "reeval_success": 0.556,
     "reeval_per_task": {
-      "task1": 0.0,
-      "task2": 0.02,
-      "task3": 0.86,
-      "task4": 0.92,
-      "task5": 0.92
+      "task1": 0.02,
+      "task2": 0.0,
+      "task3": 0.88,
+      "task4": 0.94,
+      "task5": 0.94
     },
     "train_best_success": 0.5733333333333334,
     "last3_eval_mean": 0.4578,
@@ -179,7 +257,7 @@
       0.4267,
       0.5067
     ],
-    "reeval_secs": 197.4
+    "reeval_secs": 191.2
   },
   {
     "run_id": "phase1_repro__crl__d8__n1000000__s1__a965c3a1",
@@ -190,13 +268,13 @@
     "seed": 1,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.516,
+    "reeval_success": 0.472,
     "reeval_per_task": {
-      "task1": 0.12,
+      "task1": 0.14,
       "task2": 0.16,
-      "task3": 0.9,
-      "task4": 0.44,
-      "task5": 0.96
+      "task3": 0.86,
+      "task4": 0.28,
+      "task5": 0.92
     },
     "train_best_success": 0.5466666666666666,
     "last3_eval_mean": 0.4756,
@@ -205,7 +283,7 @@
       0.4133,
       0.5467
     ],
-    "reeval_secs": 203.9
+    "reeval_secs": 216.8
   },
   {
     "run_id": "phase1_repro__crl__d8__n1000000__s2__43511f71",
@@ -216,13 +294,13 @@
     "seed": 2,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.58,
+    "reeval_success": 0.568,
     "reeval_per_task": {
-      "task1": 0.06,
-      "task2": 0.02,
+      "task1": 0.02,
+      "task2": 0.04,
       "task3": 0.98,
-      "task4": 0.9,
-      "task5": 0.94
+      "task4": 0.84,
+      "task5": 0.96
     },
     "train_best_success": 0.6,
     "last3_eval_mean": 0.5644,
@@ -231,7 +309,7 @@
       0.6,
       0.5867
     ],
-    "reeval_secs": 185.4
+    "reeval_secs": 190.3
   },
   {
     "run_id": "phase1_repro__gcbc__d16__n1000000__s0__574048d8",
@@ -245,9 +323,9 @@
     "reeval_success": 0.684,
     "reeval_per_task": {
       "task1": 0.98,
-      "task2": 0.88,
-      "task3": 0.66,
-      "task4": 0.0,
+      "task2": 0.8,
+      "task3": 0.72,
+      "task4": 0.02,
       "task5": 0.9
     },
     "train_best_success": 0.72,
@@ -257,7 +335,7 @@
       0.6933,
       0.6267
     ],
-    "reeval_secs": 168.1
+    "reeval_secs": 169.4
   },
   {
     "run_id": "phase1_repro__gcbc__d16__n1000000__s1__d072c81c",
@@ -268,13 +346,13 @@
     "seed": 1,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.624,
+    "reeval_success": 0.616,
     "reeval_per_task": {
-      "task1": 0.88,
-      "task2": 0.7,
-      "task3": 0.64,
-      "task4": 0.02,
-      "task5": 0.88
+      "task1": 0.86,
+      "task2": 0.76,
+      "task3": 0.66,
+      "task4": 0.04,
+      "task5": 0.76
     },
     "train_best_success": 0.7066666666666667,
     "last3_eval_mean": 0.6178,
@@ -283,7 +361,7 @@
       0.6267,
       0.6133
     ],
-    "reeval_secs": 197.2
+    "reeval_secs": 204.0
   },
   {
     "run_id": "phase1_repro__gcbc__d16__n1000000__s2__2070db3a",
@@ -294,13 +372,13 @@
     "seed": 2,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.656,
+    "reeval_success": 0.62,
     "reeval_per_task": {
       "task1": 0.84,
       "task2": 0.82,
-      "task3": 0.66,
+      "task3": 0.5,
       "task4": 0.0,
-      "task5": 0.96
+      "task5": 0.94
     },
     "train_best_success": 0.68,
     "last3_eval_mean": 0.6,
@@ -309,7 +387,7 @@
       0.6533,
       0.5733
     ],
-    "reeval_secs": 187.2
+    "reeval_secs": 195.0
   },
   {
     "run_id": "phase1_repro__gcbc__d32__n1000000__s0__710b713a",
@@ -320,13 +398,13 @@
     "seed": 0,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.648,
+    "reeval_success": 0.64,
     "reeval_per_task": {
-      "task1": 0.88,
-      "task2": 0.74,
-      "task3": 0.42,
-      "task4": 0.2,
-      "task5": 1.0
+      "task1": 0.86,
+      "task2": 0.8,
+      "task3": 0.3,
+      "task4": 0.3,
+      "task5": 0.94
     },
     "train_best_success": 0.72,
     "last3_eval_mean": 0.6667,
@@ -335,7 +413,7 @@
       0.6133,
       0.6667
     ],
-    "reeval_secs": 245.4
+    "reeval_secs": 251.6
   },
   {
     "run_id": "phase1_repro__gcbc__d32__n1000000__s1__86a42c07",
@@ -346,13 +424,13 @@
     "seed": 1,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.616,
+    "reeval_success": 0.6,
     "reeval_per_task": {
-      "task1": 0.86,
-      "task2": 0.82,
-      "task3": 0.44,
-      "task4": 0.1,
-      "task5": 0.86
+      "task1": 0.92,
+      "task2": 0.74,
+      "task3": 0.4,
+      "task4": 0.0,
+      "task5": 0.94
     },
     "train_best_success": 0.6666666666666667,
     "last3_eval_mean": 0.5911,
@@ -361,7 +439,7 @@
       0.5733,
       0.6
     ],
-    "reeval_secs": 268.6
+    "reeval_secs": 263.9
   },
   {
     "run_id": "phase1_repro__gcbc__d32__n1000000__s2__d96b40e1",
@@ -372,13 +450,13 @@
     "seed": 2,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.668,
+    "reeval_success": 0.576,
     "reeval_per_task": {
-      "task1": 0.96,
-      "task2": 0.86,
-      "task3": 0.48,
-      "task4": 0.1,
-      "task5": 0.94
+      "task1": 0.88,
+      "task2": 0.84,
+      "task3": 0.3,
+      "task4": 0.02,
+      "task5": 0.84
     },
     "train_best_success": 0.68,
     "last3_eval_mean": 0.6044,
@@ -387,7 +465,7 @@
       0.5733,
       0.6133
     ],
-    "reeval_secs": 248.8
+    "reeval_secs": 273.6
   },
   {
     "run_id": "phase1_repro__gcbc__d4__n1000000__s0__d05ba7dc",
@@ -398,13 +476,13 @@
     "seed": 0,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.564,
+    "reeval_success": 0.5,
     "reeval_per_task": {
-      "task1": 0.94,
-      "task2": 0.74,
-      "task3": 0.44,
+      "task1": 0.96,
+      "task2": 0.52,
+      "task3": 0.3,
       "task4": 0.0,
-      "task5": 0.7
+      "task5": 0.72
     },
     "train_best_success": 0.5866666666666667,
     "last3_eval_mean": 0.52,
@@ -413,7 +491,7 @@
       0.4933,
       0.5067
     ],
-    "reeval_secs": 162.8
+    "reeval_secs": 170.2
   },
   {
     "run_id": "phase1_repro__gcbc__d4__n1000000__s1__9243b475",
@@ -424,11 +502,11 @@
     "seed": 1,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.532,
+    "reeval_success": 0.512,
     "reeval_per_task": {
       "task1": 0.98,
-      "task2": 0.68,
-      "task3": 0.1,
+      "task2": 0.66,
+      "task3": 0.02,
       "task4": 0.0,
       "task5": 0.9
     },
@@ -439,7 +517,7 @@
       0.52,
       0.44
     ],
-    "reeval_secs": 167.1
+    "reeval_secs": 168.0
   },
   {
     "run_id": "phase1_repro__gcbc__d4__n1000000__s2__a9f262a7",
@@ -450,13 +528,13 @@
     "seed": 2,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.624,
+    "reeval_success": 0.616,
     "reeval_per_task": {
-      "task1": 0.94,
-      "task2": 0.78,
-      "task3": 0.58,
+      "task1": 0.96,
+      "task2": 0.76,
+      "task3": 0.56,
       "task4": 0.0,
-      "task5": 0.82
+      "task5": 0.8
     },
     "train_best_success": 0.6666666666666667,
     "last3_eval_mean": 0.4178,
@@ -465,7 +543,7 @@
       0.4,
       0.4133
     ],
-    "reeval_secs": 160.0
+    "reeval_secs": 160.1
   },
   {
     "run_id": "phase1_repro__gcbc__d8__n1000000__s0__9f5598c3",
@@ -476,11 +554,11 @@
     "seed": 0,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.668,
+    "reeval_success": 0.62,
     "reeval_per_task": {
-      "task1": 0.98,
-      "task2": 0.8,
-      "task3": 0.6,
+      "task1": 0.94,
+      "task2": 0.68,
+      "task3": 0.52,
       "task4": 0.0,
       "task5": 0.96
     },
@@ -491,7 +569,7 @@
       0.5733,
       0.6133
     ],
-    "reeval_secs": 153.6
+    "reeval_secs": 163.7
   },
   {
     "run_id": "phase1_repro__gcbc__d8__n1000000__s1__f3d576b6",
@@ -502,13 +580,13 @@
     "seed": 1,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.66,
+    "reeval_success": 0.648,
     "reeval_per_task": {
       "task1": 0.92,
-      "task2": 0.9,
-      "task3": 0.48,
+      "task2": 0.84,
+      "task3": 0.56,
       "task4": 0.1,
-      "task5": 0.9
+      "task5": 0.82
     },
     "train_best_success": 0.7066666666666667,
     "last3_eval_mean": 0.6089,
@@ -517,7 +595,7 @@
       0.6133,
       0.6267
     ],
-    "reeval_secs": 157.5
+    "reeval_secs": 161.7
   },
   {
     "run_id": "phase1_repro__gcbc__d8__n1000000__s2__bdbef769",
@@ -528,13 +606,13 @@
     "seed": 2,
     "checkpoint": "best",
     "episodes_per_task": 50,
-    "reeval_success": 0.66,
+    "reeval_success": 0.696,
     "reeval_per_task": {
       "task1": 0.86,
-      "task2": 0.86,
-      "task3": 0.84,
+      "task2": 0.8,
+      "task3": 0.92,
       "task4": 0.0,
-      "task5": 0.74
+      "task5": 0.9
     },
     "train_best_success": 0.7200000000000001,
     "last3_eval_mean": 0.6667,
@@ -543,6 +621,6 @@
       0.72,
       0.64
     ],
-    "reeval_secs": 161.7
+    "reeval_secs": 156.5
   }
 ]

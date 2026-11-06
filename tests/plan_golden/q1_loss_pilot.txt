@@ -1,4 +1,4 @@
-q1_loss_pilot   (/home/vt7993/rl-scaling-refactor/experiments/q1_loss_pilot.yaml)
+q1_loss_pilot   (<repo>/experiments/q1_loss_pilot.yaml)
   dataset   antmaze-medium-stitch-v0  size 1,000,000
   axes      agent=['crl']  depth=[4, 32]  profile=['ogbench', 'scaling_crl']
   seeds     [0]

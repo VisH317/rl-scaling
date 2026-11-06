@@ -1,0 +1,46 @@
+# The disambiguation run for the humanoid reversal.
+#
+# `humanoid_ensemble1` found depth HURTING where `phase1_repro` found it helping, but
+# those two grids differ in THREE ways -- dataset, critic_ensemble (2 -> 1) and
+# discount (0.99 -> 0.995, via use_published_flags) -- so the reversal is not
+# attributable to the environment. This file moves exactly one of them.
+#
+# Identical to `phase1_repro` except:
+#     critic_ensemble  2 -> 1        (the one deliberate change)
+#     agent            crl only      (gcbc has no critic; the knob does nothing there)
+#     depth            {4, 32} only  (the endpoints are enough to establish the sign)
+#
+# Everything else is phase1_repro's and must stay that way: antmaze-medium-stitch-v0
+# native 1M, seeds 0/1/2, binary NCE on dot-product logits, residual tower width 256,
+# repr_dim 64, step_cap 2M, published per-dataset flags (which leave discount at 0.99
+# for THIS dataset -- do not hand-set it).
+#
+# WHY THIS IS THE CHEAPEST DISCRIMINATING EXPERIMENT. The actor maximises `min` over
+# the critic ensemble (`critic_losses.py:_reduce_q`). At critic_ensemble 1 that min is
+# a pass-through, so there is NO pessimism: DDPG+BC seeks actions where Q is high,
+# which means it actively seeks the critic's errors, and a deeper critic has sharper,
+# more confident errors to find. If that mechanism explains the humanoid reversal,
+# depth should stop paying here too.
+#
+# READ IT AS:
+#   depth still scales (d32 >> d4)  -> the ensemble is NOT the cause; the cause is
+#                                      environmental (body, dataset, or discount), and
+#                                      phase1_repro's headline stands as written.
+#   the gain collapses              -> phase1_repro's depth result DEPENDED on having
+#                                      two critics, and its headline needs qualifying.
+#
+# Reference to beat, phase1_repro CRL at reeval@50: d4 35.5 +/- 9.4, d32 86.7 +/- 2.9.
+#
+#   python src/scripts/estimate_runtime.py experiments/antmaze_ensemble1.yaml --verbose
+#   python src/run.py experiments/antmaze_ensemble1.yaml --submit
+name: antmaze_ensemble1
+dataset: antmaze-medium-stitch-v0
+seeds: [0, 1, 2]
+agent: [crl]
+depth: [4, 32]
+profile: ogbench               # binary_nce + dot + no penalty
+critic_ensemble: 1             # <- the one deliberate change
+repr_dim: 64
+tower: residual
+width: 256
+step_cap: 2000000
