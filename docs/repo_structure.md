@@ -94,6 +94,8 @@ experiment file. **No stage below may be merged with that check failing.**
 | D10 | **Dead scaffolding.** `src/rl_scaling/` contains only `print("Hello from rl-scaling!")`, is not installed, and `pyproject.toml` declares `requires-python = ">=3.13"` (venv is **3.11.15**), `dependencies = []` (real deps are in `src/offline/requirements.txt`), and an entry point `rl_scaling:main` nothing calls | `pyproject.toml`, `src/rl_scaling/__init__.py` | a newcomer's first `uv sync` fails or installs nothing |
 | D11 | **3,336 lines of markdown, a 2-line root README, no index** | `find . -name '*.md'` | the work is undiscoverable from the top |
 | D13 | **The vendored OGBench implementations are not versioned.** `.gitignore` line 1 is `lib/**`, so 54 MB of `impls/{agents,utils}` — which `patches.py` monkeypatches and the project cannot run without — is outside git. A fresh clone or a `git worktree` has no `lib/` at all | found by creating the worktree for this refactor | the repo is not reproducible from git alone, and checks pass *vacuously* where it is missing (see Stage 0's fix) |
+| D14 | **Figures were published by hand.** `src/offline/figures/<grid>/` was a manual copy of `analysis/<grid>/` from scratch, so it held a stale subset while the live figures sat in scratch; nothing detected the gap | found while adding the depth-32 and humanoid figures | a document and the figure it describes could disagree indefinitely |
+| D15 | **A reference constant that is not keyed by what it refers to.** `plot_results.PUBLISHED` held OGBench's antmaze-medium-stitch numbers and was shaded onto *every* grid, including a humanoidmaze one | found by looking at the rendered PNG, not the code | a chart that is wrong in a way code review does not surface |
 | D12 | **No CPU test entry point.** 6 modules have `_selftest`s; the only thing that runs them is `smoke.sbatch`, which **needs a GPU** | `grep -l _selftest src/**/*.py` | nothing catches drift on the login node in the 10 s it would take |
 
 ---
@@ -318,6 +320,31 @@ as golden files in Stage 0.
 2. `monitor.py` becomes `dashboard.py --grid` — one `squeue` parser. [D6]
 3. Split `config.py`: `registry.py` (datasets, published flags, subset plans) keeps the verified values; the superseded config classes move to `docs/source_comparison.md`, where the three-codebase comparison tables are genuinely valuable as **prose** and actively confusing as **code**. [D7]
 
+### 4.5 `results/` — one folder per result *(implemented 2026-11-06)*
+
+Not in the original plan; added when the depth-32 and humanoid runs landed and the
+hand-copied `src/offline/figures/` was found stale (D14).
+
+```
+results/<grid-or-suite>/
+    README.md          the document
+    fig*.png fig*.csv  the figures it reads, same folder, bare-filename links
+    reeval_50ep.json   the 50-episodes/task table its headline quotes
+```
+
+Three rules, each closing a way the old layout went wrong:
+
+1. **Publishing is part of drawing, not a later step.** `plot_results.py` copies into
+   `results/<grid>/` as it draws; `report.py` writes the eval document into the same
+   folder as its figures. Nothing is copied by hand, so nothing can be forgotten. [D14]
+2. **One folder, so links are bare filenames.** A document and its figures move
+   together and render on GitHub.
+3. **`paths.RESULTS` / `paths.results_dir()` is the one definition**, so this cannot
+   drift from `OUTPUT_REPO` the way the snapshot split nearly broke `--report`.
+
+`results/README.md` is the index over the folders: the headline table, every figure and
+what to read it for, and what is not measured yet.
+
 ### Stage 5 — generated reference + docs index · ~300 ln · no risk
 
 The five generated files in §4.4, plus a root `README.md` that is an index: what this
@@ -352,15 +379,35 @@ that does not exist yet is the same drift problem in a new place.
 
 ## 7. Decisions needed
 
-1. **Merge timing.** The branch cannot land while `2994202` is queued (§0.1). Merge
-   right after it finishes, or hold until Stage 1's snapshot makes merge timing
-   irrelevant?
+1. ~~**Merge timing.**~~ **Resolved 2026-11-06: merged** (`bde0fc4`) once the queue
+   drained. Two lessons, both paid for:
+   - The merge carried the worktree's `lib` **symlink** and applied it over the real
+     54 MB directory, destroying it. `.gitignore` said `lib/**`, which ignores the
+     directory's *contents* but matches nothing at the path `lib`, so the symlink was
+     trackable. Restored by re-cloning upstream and **verified byte-identical** via the
+     `lib_hash` the code snapshots record (`02f6253778bc`). Now `lib`, `lib/` and
+     `lib/**` are all ignored. This is D13 turning into an incident, not a new problem.
+   - Stage 1's `_prelude.sh` derived `REPO` from `${BASH_SOURCE[0]}`, which **Slurm
+     makes false**: it copies the batch script into its spool directory before running
+     it, so the script could not even find the prelude. Both reeval jobs died in one
+     second. `sbatch --test-only` had accepted the identical submission, because it
+     never runs the script — the verification was structurally incapable of catching
+     it. The submitter now exports `RL_SCALING_REPO` through one function,
+     `slurm.exports()`, and `check.py` executes each script's prologue with the file
+     copied out of the repo.
+
+   **The general lesson for the remaining stages:** a check that cannot fail is worth
+   nothing, and "it passed" is not evidence until the check has been shown to bite.
+   Stage 0 applied that to run ids; Stage 1 did not apply it to the shell.
 2. **`--regenerate` semantics.** When a template changes, should regenerating an
    experiment preserve *every* key that differs from the template, or only keys listed
    in its `# generated-from:` header? The first is safer, the second is tidier.
 3. **Does `results/phase1_repro/README.md` become an AUTO-block document** (Stage 3)? It would stop
    the numbers drifting, at the cost of a one-time rewrite of a 651-line file that
-   currently reads well.
+   currently reads well. **Now more attractive than when first written:** updating it
+   for depth 32 by hand meant eight separate edits to tables, a headline, a status
+   block and two footnotes, and that is exactly the work the AUTO blocks exist to
+   remove.
 4. **How much does `docs/reference/` duplicate the skill?** Current split: the
    reference is exhaustive and generated, the skill is short, opinionated and
    hand-written, and points at the reference. If the skill starts restating key
