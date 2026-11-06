@@ -155,6 +155,7 @@ def load_runs(grid: str) -> list[dict]:
         rec = {
             "run_dir": d,
             "agent": cfg["agent"]["agent"],
+            "dataset": cfg.get("dataset"),
             "depth": cfg["arch"]["depth"],
             "size": cfg["size"],
             "seed": cfg["seed"],
@@ -623,8 +624,23 @@ def fig_heatmap(runs, out_dir, grid):
 # Figure 1b -- the comparable headline: last-3-eval mean, pinned to a common step
 # ---------------------------------------------------------------------------
 
-#: OGBench's published antmaze-medium-stitch numbers (mean of last 3 evals, 50 eps/task).
-PUBLISHED = {"crl": (0.53, 0.06), "gcbc": (0.45, 0.11)}
+#: OGBench's published numbers, keyed BY DATASET (mean of last 3 evals, 50 eps/task).
+#:
+#: Keyed by dataset because it was previously a bare {agent: value} pair holding the
+#: antmaze-medium-stitch numbers, which were then drawn on every grid -- including
+#: humanoid_ensemble1, where they are a reference from a different environment and
+#: invite exactly the wrong comparison. A grid whose dataset is not listed here gets no
+#: band and says so in its caption. Add an entry only with a source: these two are
+#: verified in research_log.md (CRL 53 +/- 6, GCBC 45 +/- 11).
+PUBLISHED_BY_DATASET = {
+    "antmaze-medium-stitch-v0": {"crl": (0.53, 0.06), "gcbc": (0.45, 0.11)},
+}
+
+
+def published_for(runs) -> dict:
+    """The published reference for these runs' dataset, or {} if none is verified."""
+    ds = {r.get("dataset") for r in runs if r.get("dataset")}
+    return PUBLISHED_BY_DATASET.get(next(iter(ds)), {}) if len(ds) == 1 else {}
 
 #: The step every run in a depth comparison must be measured at. The plateau rule stops
 #: runs between 0.9M and 1.9M steps, so an unpinned last-3 compares different points on
@@ -682,17 +698,17 @@ def fig_last3_vs_depth(runs, out_dir, grid):
                 va="center", color=MUTED, fontsize=12)
         depths_seen = set(C.GRID_DEPTHS)
 
-    # Published bands as shaded reference, not series.
-    for agent, (mu, sd) in PUBLISHED.items():
+    # Published bands as shaded reference, not series -- and only for the dataset they
+    # were actually measured on.
+    published = published_for(runs)
+    for i, (agent, (mu, sd)) in enumerate(sorted(published.items())):
         ax.axhspan(mu - sd, mu + sd, color=SERIES[agent], alpha=0.07, zorder=0)
         ax.axhline(mu, color=SERIES[agent], linewidth=1.0, linestyle=(0, (5, 4)),
                    alpha=0.55, zorder=1)
-    ax.annotate("published CRL 0.53 +- 0.06", (min(depths_seen), PUBLISHED["crl"][0]),
-                textcoords="offset points", xytext=(2, 5), color=SERIES["crl"],
-                fontsize=8, alpha=0.9)
-    ax.annotate("published GCBC 0.45 +- 0.11", (min(depths_seen), PUBLISHED["gcbc"][0]),
-                textcoords="offset points", xytext=(2, -12), color=SERIES["gcbc"],
-                fontsize=8, alpha=0.9)
+        ax.annotate(f"published {SERIES_LABEL[agent]} {mu:.2f} +- {sd:.2f}",
+                    (min(depths_seen), mu), textcoords="offset points",
+                    xytext=(2, 5 if agent == "crl" else -12), color=SERIES[agent],
+                    fontsize=8, alpha=0.9)
 
     ticks = sorted(depths_seen)
     ax.set_xscale("log", base=2)
@@ -705,8 +721,14 @@ def fig_last3_vs_depth(runs, out_dir, grid):
                title=f"{grid}: depth vs the published metric")
     cap = ("Mean over seeds; error bars 1 SD; faint dots individual seeds. Measured at "
            f"a fixed {COMMON_STEP // 1000}k steps for every run, so depths are "
-           "like-for-like.\nShaded bands are OGBench's published numbers at 50 "
-           "episodes/task; these runs evaluate with 15, so they are noisier.")
+           "like-for-like.")
+    ds = {r.get("dataset") for r in runs if r.get("dataset")}
+    if published:
+        cap += ("\nShaded bands are OGBench's published numbers for this dataset at 50 "
+                "episodes/task; these runs evaluate with 15, so they are noisier.")
+    else:
+        cap += ("\nNo published reference is drawn: no verified OGBench number for "
+                + (", ".join(sorted(ds)) if ds else "this dataset") + ".")
     if excluded:
         cap += "\nNot yet at that step, so omitted: " + ", ".join(excluded) + "."
     fig.text(0.5, -0.13, cap, color=MUTED, fontsize=8, ha="center")

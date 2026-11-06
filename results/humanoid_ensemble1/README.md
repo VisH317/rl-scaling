@@ -234,3 +234,10 @@ lower on best-eval and 33 points lower settled. On this grid, depth is a pure lo
 2. The same header says the changes from `phase1_repro` are "only these" and lists two;
    `discount` also differs, via `use_published_flags`. The YAML notes the discount
    separately, lower down, but the "only these" list is wrong as written.
+3. **`fig1b` was drawing the wrong published reference.** `plot_results.py` held
+   OGBench's `antmaze-medium-stitch` numbers (CRL 0.53, GCBC 0.45) as a bare
+   `{agent: value}` constant and shaded them onto *every* grid — so this grid's chart
+   invited a comparison against a different environment's published result. The
+   constant is now keyed by dataset, a grid with no verified number gets no band, and
+   the caption says so. Only `antmaze-medium-stitch-v0` is listed, because it is the
+   only one verified (research_log §766).
