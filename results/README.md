@@ -10,7 +10,7 @@ results/
   antmaze_stitch__baseline_arch/            6 runs   done     the reproduction control
   antmaze_stitch__depth/                   24 runs   done     depth helps              <- main result
   antmaze_stitch__depth_ensemble1/          6 runs   RUNNING  is it the ensemble?
-  antmaze_navigate__depth/                 12 runs   not run  is it the data?
+  antmaze_navigate__depth/                 12 runs   RUNNING  is it the data?
   humanoidmaze_navigate__depth_ensemble1/   8 runs   done     depth hurts              <- the reversal
   interp__critic_depth/                    16 evals  done     what does the critic learn?
 ```
@@ -181,7 +181,7 @@ else, verified by a resolved-config diff. Tests whether the depth result depende
 having two critics — the actor maximises `min` over the ensemble, so at size 1 there is
 no pessimism at all.
 
-### `antmaze_navigate__depth/` — **not submitted** · 12 runs · 136 GPU-h
+### `antmaze_navigate__depth/` — **running** (`2995262`, `2995263`) · 12 runs · 136 GPU-h
 *(grid `antmaze_navigate1`)* `phase1_repro` with the dataset changed to
 `antmaze-medium-navigate-v0` and nothing else. Tests whether the reversal is about the
 **data** rather than the body: navigate has 1000 trajectories × 1001 steps against
@@ -212,11 +212,33 @@ published command for whichever dataset is named.
 
 | what | why it matters | cost |
 |---|---|---|
-| `actor_p_randomgoal` at 0.5 on humanoid | the uncovered confound most likely to matter | 4 runs |
+| **`actor_p_randomgoal`** — see backlog below | the last uncovered confound | 4 runs |
 | early-stop humanoid d32 at its 200k peak | tests whether the collapse is just training too long; checkpoints already exist | free |
 | `interp01` on `antmaze_ensemble1` / `antmaze_navigate1` | the probes on the disambiguation grids | 8 evals |
 | `state_probes` at `block_k` | per-block representational change; needs activation capture | — |
 | `q1_loss_pilot`, `scaling_crl_replication` | **deprioritised** — the paper's contribution is the architecture, and its energy function is believed to be a dot product, so the loss-form difference may not be a real deviation | — |
+
+### Backlog — `actor_p_randomgoal` on humanoidmaze
+
+**Deliberately deferred, not forgotten.** The fourth confound (§ above) is the only one
+with no experiment: `humanoid_ensemble1` ran with `actor_p_trajgoal/randomgoal =
+1.0/0.0` because that is what OGBench publishes for `humanoidmaze-medium-navigate`,
+against `0.5/0.5` on antmaze-stitch. At `p_randomgoal = 0` the actor is **never trained
+on an out-of-trajectory goal**, which is the stitching capability itself — and task 4,
+the one that needs it, never works on humanoid at any depth.
+
+When it is wanted, it is a copy of `humanoid_ensemble1.yaml` with depths `[4, 32]`,
+2 seeds, and these two lines added:
+
+```yaml
+actor_p_trajgoal: 0.5       # pinned to antmaze-stitch's values; without these,
+actor_p_randomgoal: 0.5     # use_published_flags sets 1.0/0.0 for this dataset
+```
+
+4 runs. Read it as: **task 4 becomes non-zero** → the humanoid failure was partly that
+stitching was never trained for, and the body is less implicated than it looks;
+**task 4 stays at zero** → the capability is absent for a deeper reason and the
+goal-sampling difference is a red herring.
 
 Research context and the verified-facts log live in
 [`../src/offline/`](../src/offline/): `offline_exp.md` (the brief), `algorithm.md` (what

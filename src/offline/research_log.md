@@ -538,6 +538,17 @@ generation seeds. Verify before claiming an exact reproduction.
   state the deviation, (c) run both at depths 4 and 32 as a 4-run pilot and let the data decide.
   Note the brief's own background paragraph describes InfoNCE + logsumexp, i.e. the **online** code, while
   proposing to build on offline code that does neither.
+- **Q4 — Does the humanoid reversal survive `actor_p_randomgoal = 0.5`? (BACKLOG, deferred 2026-11-06.)**
+  `phase1_repro` and `humanoid_ensemble1` differ in FOUR ways, not the two their YAML claims:
+  dataset, `critic_ensemble` (2→1), `discount` (0.99→0.995) and **`actor_p_trajgoal/randomgoal`
+  (0.5/0.5 → 1.0/0.0)**. The last two arrive silently through `use_published_flags`, which applies
+  OGBench's published command for whichever dataset is named. Two of the four now have a dedicated
+  experiment — `antmaze_ensemble1` (running) and `antmaze_navigate1` (running) — and this one does
+  not. It may matter most: at `p_randomgoal = 0` the actor is never trained on an out-of-trajectory
+  goal, which is exactly the stitching capability, and task 4 (the forced 180° detour) is at 0.00–0.26
+  on humanoid at every depth while going 0.08 → 0.97 with depth on antmaze. 4 runs; the design is in
+  `results/README.md` under "Backlog". Deferred by choice, not oversight.
+
 - **Q2 — Representation dim (D8).** Three codebases, three values: 16 (stable-CRL, which explicitly found
   16 ≫ 128/512), 64 (scaling-crl), 512 (OGBench). Stable-CRL's finding was on *images*; whether it
   transfers to 37-dim states is unknown. A narrow bottleneck may also interact with depth, which is the
