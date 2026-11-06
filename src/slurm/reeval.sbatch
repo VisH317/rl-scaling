@@ -24,7 +24,18 @@
 
 set -uo pipefail
 
-source "$(dirname "${BASH_SOURCE[0]}")/_prelude.sh"
+# Slurm COPIES this script into its spool directory before running it, so
+# ${BASH_SOURCE[0]} points at /var/spool/..., NOT into the repo. The submitter
+# exports RL_SCALING_REPO (the code snapshot's root) for that reason; the
+# BASH_SOURCE fallback is for running this file directly with bash.
+_RL_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+_RL_PRELUDE="${RL_SCALING_REPO:-${_RL_HERE%/src/slurm}}/src/slurm/_prelude.sh"
+[ -r "$_RL_PRELUDE" ] || _RL_PRELUDE="$_RL_HERE/_prelude.sh"
+if [ ! -r "$_RL_PRELUDE" ]; then
+  echo "no prelude found: set RL_SCALING_REPO to the repo (or snapshot) root" >&2
+  exit 1
+fi
+source "$_RL_PRELUDE"
 cd "$REPO" || exit 1
 
 EPISODES=${EPISODES:-50}

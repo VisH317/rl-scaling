@@ -464,11 +464,14 @@ def main() -> int:
     if args.figures:
         return _sub("plot_results.py", "--grid", cfg["name"])
     if args.reeval:
-        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        from rl_scaling import slurm as S
+        snap = S.snapshot()
         env = os.environ.copy()
         env["GRIDS"] = cfg["name"]
-        return subprocess.call(["sbatch", "--export=ALL,GRIDS=" + cfg["name"],
-                                os.path.join(here, "src/slurm/reeval.sbatch")], env=env)
+        return subprocess.call(
+            ["sbatch", f"--export={S.exports(snap, GRIDS=cfg['name'])}",
+             f"--output={S.log_option('eval')}",
+             S.sbatch_script(snap, "reeval.sbatch")], env=env)
 
     plan(cfg, runs, args.experiment)
     if not (args.submit or args.write):

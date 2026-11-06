@@ -37,7 +37,9 @@ evals:
     params:
       cell_subdiv: 4
       goal_samples: 8
-      action_sources: [policy, oracle_geodesic, oracle_euclid]
+      # `dataset` is what makes fig3 (the advantage field, Q(policy) - Q(dataset))
+      # possible: without it that figure has no data and figures.py skips it.
+      action_sources: [policy, oracle_geodesic, oracle_euclid, dataset]
       direction_split_deg: 45.0
 
   - name: state_probes

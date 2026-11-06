@@ -16,9 +16,12 @@
 : "${RL_SCALING_SCRATCH:=/scratch/gpfs/vt7993}"
 export RL_SCALING_SCRATCH
 
-# REPO: whatever tree this script is in -- which is what makes a code snapshot work
-# without editing anything. Overridable for a hand-run.
-REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# REPO: the tree this PRELUDE is in. Inside this file BASH_SOURCE is reliable,
+# because a `source` resolves the real path -- unlike the sbatch script that sourced
+# it, which Slurm copies into its spool directory before running. The submitter
+# therefore exports RL_SCALING_REPO, and that wins when present.
+REPO="${REPO:-${RL_SCALING_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}}"
+export RL_SCALING_REPO="$REPO"
 PY="${PY:-$RL_SCALING_SCRATCH/rl-scaling/venv/bin/python}"
 
 if [ ! -x "$PY" ]; then

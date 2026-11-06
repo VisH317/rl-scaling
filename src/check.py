@@ -203,6 +203,13 @@ def check_run_ids_on_disk():
 #: Lines whose content legitimately varies between machines or over time. They are
 #: blanked rather than dropped so a changed line count still shows up as a diff.
 _VOLATILE = [
+    # The repo root first, and ANYWHERE in the line, not just at its start. A golden
+    # that embeds the absolute path can only be verified from the tree that wrote it,
+    # which defeats the point when the same goldens have to hold in a worktree and on
+    # a code snapshot on scratch.
+    (re.compile(re.escape(os.path.realpath(REPO))), "<repo>"),
+    (re.compile(re.escape(os.environ.get("RL_SCALING_SCRATCH",
+                                         "/scratch/gpfs/vt7993"))), "<scratch>"),
     (re.compile(r"^(\s*)(/|~).*$"), r"\1<path>"),
     (re.compile(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}"), "<time>"),
     (re.compile(r"^(  cost      ).*$"), r"\1<cost>"),
@@ -279,6 +286,75 @@ def check_evals():
     return fn
 
 
+def check_sbatch_prelude():
+    """Every sbatch script must find `_prelude.sh` the way SLURM runs it.
+
+    Slurm copies the batch script into /var/spool/slurmd/job<id>/ before executing
+    it, so ${BASH_SOURCE[0]} does NOT point into the repo and the script cannot
+    locate the prelude from its own path. The submitter therefore exports
+    RL_SCALING_REPO. This failed in production while `sbatch --test-only` accepted
+    the submission, because --test-only never runs the script -- so the check has to
+    actually execute the resolution block, with the script moved out of the repo.
+
+    Only the prologue is run (everything up to and including the `source` line), so
+    this needs no GPU and starts no work.
+    """
+    def fn():
+        import shutil
+        import subprocess
+        import tempfile
+        scripts = sorted(glob.glob(os.path.join(REPO, "src", "slurm", "*.sbatch")))
+        if not scripts:
+            return False, "no sbatch scripts found"
+        bad, good = [], []
+        for sc in scripts:
+            lines = open(sc).read().splitlines(keepends=True)
+            cut = [i for i, ln in enumerate(lines) if "_PRELUDE" in ln
+                   and ln.strip().startswith("source")]
+            if not cut:
+                # smoke.sbatch predates the prelude and hardcodes its paths.
+                if "_prelude" not in "".join(lines):
+                    continue
+                bad.append(f"{os.path.basename(sc)}: sources a prelude, "
+                           f"but not via the resolved $_RL_PRELUDE")
+                continue
+            prologue = "".join(lines[:cut[0] + 1]) + '\necho "REPO=$REPO"\n'
+            for label, spool, env_repo in (
+                    ("slurm", True, REPO),      # copied away + told where the repo is
+                    ("hand-run", False, None)):  # run in place, nothing exported
+                d = tempfile.mkdtemp()
+                try:
+                    path = (os.path.join(d, "slurm_script") if spool
+                            else os.path.join(os.path.dirname(sc), ".check_prologue.sh"))
+                    open(path, "w").write(prologue)
+                    env = {k: v for k, v in os.environ.items()
+                           if k != "RL_SCALING_REPO"}
+                    if env_repo:
+                        env["RL_SCALING_REPO"] = env_repo
+                    r = subprocess.run(["bash", path], capture_output=True, text=True,
+                                       env=env, timeout=120)
+                    out = [ln for ln in r.stdout.splitlines()
+                           if ln.startswith("REPO=")]
+                    if r.returncode != 0 or not out:
+                        bad.append(f"{os.path.basename(sc)} [{label}]: exit "
+                                   f"{r.returncode}: "
+                                   f"{(r.stderr.strip().splitlines() or [''])[-1]}")
+                    elif os.path.realpath(out[-1][5:]) != os.path.realpath(REPO):
+                        bad.append(f"{os.path.basename(sc)} [{label}]: REPO resolved "
+                                   f"to {out[-1][5:]}, expected {REPO}")
+                    else:
+                        good.append(f"{os.path.basename(sc)}[{label}]")
+                finally:
+                    if not spool:
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+                    shutil.rmtree(d, ignore_errors=True)
+        return not bad, "\n".join(bad) or "resolved: " + ", ".join(good)
+    return fn
+
+
 # ---------------------------------------------------------------------------
 
 def main() -> int:
@@ -300,6 +376,8 @@ def main() -> int:
     check("every experiment resolves + run ids stable", check_run_ids(args.write))
     check("no run directory orphaned", check_run_ids_on_disk())
     check("eval registry valid", check_evals())
+    check("sbatch scripts find the prelude as slurm runs them",
+          check_sbatch_prelude())
     check("plan output unchanged", check_plans(args.write))
 
     bad = [n for n, ok, _, _ in _RESULTS if not ok]

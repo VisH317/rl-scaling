@@ -102,6 +102,23 @@ def sbatch_script(snapshot_root: str, name: str) -> str:
     return os.path.join(snapshot_root, "src", "slurm", name)
 
 
+def exports(snapshot_root: str, **extra) -> str:
+    """The `--export` value for every submission. One source, because getting it
+    wrong fails only on a real node.
+
+    RL_SCALING_REPO is not a convenience: Slurm copies the batch script into its
+    spool directory before running it, so the script cannot find its own repo from
+    ${BASH_SOURCE[0]} and cannot even locate `_prelude.sh`. The submitter is the only
+    party that knows which tree it submitted, so it has to say.
+
+    RL_SCALING_OUTPUT_REPO keeps generated documents in the live checkout instead of
+    in the snapshot on scratch.
+    """
+    kv = {"RL_SCALING_REPO": snapshot_root,
+          "RL_SCALING_OUTPUT_REPO": paths.OUTPUT_REPO, **extra}
+    return ",".join(["ALL"] + [f"{k}={v}" for k, v in kv.items()])
+
+
 def log_option(job_kind: str) -> str:
     """`--output` for the submitter to pass.
 

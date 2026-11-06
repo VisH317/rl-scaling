@@ -232,7 +232,7 @@ def write(cfg: dict, tasks: list) -> list:
     return paths
 
 
-def submit(cfg: dict, tasks: list, task_paths: list) -> int:
+def submit(cfg: dict, tasks: list, task_paths: list, dependency: str = None) -> int:
     """Freeze the code, then submit the job out of the frozen copy.
 
     A queued job runs `$REPO` as it is when it STARTS. Without a snapshot, editing a
@@ -257,11 +257,16 @@ def submit(cfg: dict, tasks: list, task_paths: list) -> int:
         f.write("\n".join(task_paths) + "\n")
 
     snap = S.snapshot()
-    exports = ",".join(["ALL", f"TASK_FILE={task_file}",
-                        f"RL_SCALING_OUTPUT_REPO={P.OUTPUT_REPO}"])
+    exports = S.exports(snap, TASK_FILE=task_file)
     cmd = ["sbatch", f"--time={cap}", f"--job-name=crl-eval-{cfg['name']}",
-           f"--output={S.log_option('eval')}", f"--export={exports}",
-           S.sbatch_script(snap, "eval_pack.sbatch")]
+           f"--output={S.log_option('eval')}", f"--export={exports}"]
+    # An eval selects its checkpoint from the reeval table, so when that table is
+    # still being rebuilt the suite has to queue BEHIND it or it would select on
+    # stale scores -- or, for a depth with no reeval row yet, fall back to
+    # best_success and label the point differently from its neighbours.
+    if dependency:
+        cmd.append(f"--dependency={dependency}")
+    cmd.append(S.sbatch_script(snap, "eval_pack.sbatch"))
     print("  " + " ".join(cmd))
     return subprocess.call(cmd, env=os.environ.copy())
 
@@ -333,6 +338,8 @@ def main() -> int:
                     help="fill offline/evals/results_<suite>.md from the template")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--run", metavar="TASK_JSON")
+    ap.add_argument("--dependency", metavar="SPEC",
+                    help="passed to sbatch, e.g. afterok:123456")
     args = ap.parse_args()
 
     if args.run:
@@ -365,7 +372,7 @@ def main() -> int:
         return 1
     paths = write(cfg, tasks)
     if args.submit:
-        return submit(cfg, tasks, paths)
+        return submit(cfg, tasks, paths, dependency=args.dependency)
     return 0
 
 

@@ -121,10 +121,17 @@ def reconcile(rows: list[dict], jobs: dict[str, str]) -> list[dict]:
 
 def submit_pack(run_ids: list[str], *, after: str | None, dry: bool) -> str | None:
     """`after` is a full sbatch dependency expression, e.g. "afterok:123"."""
+    from rl_scaling import slurm as S
+
+    # Freeze the code and submit the frozen copy. RL_SCALING_REPO is required, not
+    # cosmetic: Slurm copies the batch script into its spool directory, so the script
+    # cannot locate `_prelude.sh` from its own path.
+    snap = S.snapshot()
     env = dict(os.environ)
     env["RUN_IDS"] = " ".join(run_ids)
     env["RUNS_PER_GPU"] = str(C.SLURM.runs_per_gpu)
     env["MEM_FRACTION"] = str(C.SLURM.xla_mem_fraction)
+    env["RL_SCALING_REPO"] = snap
 
     cmd = [
         "sbatch",
@@ -138,7 +145,7 @@ def submit_pack(run_ids: list[str], *, after: str | None, dry: bool) -> str | No
     ]
     if after:
         cmd.append(f"--dependency={after}")
-    cmd.append(os.path.abspath(PACK_SBATCH))
+    cmd.append(S.sbatch_script(snap, os.path.basename(PACK_SBATCH)))
 
     if dry:
         print("  would submit:", " ".join(cmd))
