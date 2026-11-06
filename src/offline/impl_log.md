@@ -318,7 +318,7 @@ loading is unimplemented).
 ## I16 — Compiling the first results report  ·  2026-11-05
 
 Anchor grid complete (6/6). Repro grid 16/24, with CRL d16/d32 and GCBC d32 still
-training. Wrote `src/offline/results_phase1.md` from the figure CSVs rather than from
+training. Wrote `results/phase1_repro/README.md` from the figure CSVs rather than from
 terminal output, so every table in it is regenerable.
 
 Submitted job `2993575` (`src/slurm/reeval.sbatch`, new) to re-score `params_best.pkl`

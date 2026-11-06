@@ -1,0 +1,548 @@
+[
+  {
+    "run_id": "phase1_repro__crl__d16__n1000000__s0__bd08cc0c",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 16,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.728,
+    "reeval_per_task": {
+      "task1": 0.28,
+      "task2": 0.84,
+      "task3": 0.78,
+      "task4": 0.92,
+      "task5": 0.82
+    },
+    "train_best_success": 0.8266666666666668,
+    "last3_eval_mean": 0.7156,
+    "last3_evals": [
+      0.72,
+      0.6,
+      0.8267
+    ],
+    "reeval_secs": 212.7
+  },
+  {
+    "run_id": "phase1_repro__crl__d16__n1000000__s1__5ac42ece",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 16,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.72,
+    "reeval_per_task": {
+      "task1": 0.36,
+      "task2": 0.84,
+      "task3": 0.9,
+      "task4": 0.54,
+      "task5": 0.96
+    },
+    "train_best_success": 0.8,
+    "last3_eval_mean": 0.6889,
+    "last3_evals": [
+      0.6533,
+      0.8,
+      0.6133
+    ],
+    "reeval_secs": 211.4
+  },
+  {
+    "run_id": "phase1_repro__crl__d16__n1000000__s2__c674fc85",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 16,
+    "tower": "residual",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.904,
+    "reeval_per_task": {
+      "task1": 0.7,
+      "task2": 1.0,
+      "task3": 0.98,
+      "task4": 0.9,
+      "task5": 0.94
+    },
+    "train_best_success": 0.9199999999999999,
+    "last3_eval_mean": 0.6667,
+    "last3_evals": [
+      0.6533,
+      0.7333,
+      0.6133
+    ],
+    "reeval_secs": 149.2
+  },
+  {
+    "run_id": "phase1_repro__crl__d4__n1000000__s0__b83f1e8b",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.376,
+    "reeval_per_task": {
+      "task1": 0.0,
+      "task2": 0.74,
+      "task3": 0.72,
+      "task4": 0.1,
+      "task5": 0.32
+    },
+    "train_best_success": 0.52,
+    "last3_eval_mean": 0.4178,
+    "last3_evals": [
+      0.36,
+      0.3733,
+      0.52
+    ],
+    "reeval_secs": 208.5
+  },
+  {
+    "run_id": "phase1_repro__crl__d4__n1000000__s1__acdde8ae",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.444,
+    "reeval_per_task": {
+      "task1": 0.42,
+      "task2": 0.86,
+      "task3": 0.94,
+      "task4": 0.0,
+      "task5": 0.0
+    },
+    "train_best_success": 0.49333333333333335,
+    "last3_eval_mean": 0.3822,
+    "last3_evals": [
+      0.2667,
+      0.4133,
+      0.4667
+    ],
+    "reeval_secs": 191.6
+  },
+  {
+    "run_id": "phase1_repro__crl__d4__n1000000__s2__9ad8e9d4",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.208,
+    "reeval_per_task": {
+      "task1": 0.0,
+      "task2": 0.02,
+      "task3": 0.66,
+      "task4": 0.14,
+      "task5": 0.22
+    },
+    "train_best_success": 0.2666666666666667,
+    "last3_eval_mean": 0.1911,
+    "last3_evals": [
+      0.1733,
+      0.2133,
+      0.1867
+    ],
+    "reeval_secs": 241.4
+  },
+  {
+    "run_id": "phase1_repro__crl__d8__n1000000__s0__f813301a",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 8,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.544,
+    "reeval_per_task": {
+      "task1": 0.0,
+      "task2": 0.02,
+      "task3": 0.86,
+      "task4": 0.92,
+      "task5": 0.92
+    },
+    "train_best_success": 0.5733333333333334,
+    "last3_eval_mean": 0.4578,
+    "last3_evals": [
+      0.44,
+      0.4267,
+      0.5067
+    ],
+    "reeval_secs": 197.4
+  },
+  {
+    "run_id": "phase1_repro__crl__d8__n1000000__s1__a965c3a1",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 8,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.516,
+    "reeval_per_task": {
+      "task1": 0.12,
+      "task2": 0.16,
+      "task3": 0.9,
+      "task4": 0.44,
+      "task5": 0.96
+    },
+    "train_best_success": 0.5466666666666666,
+    "last3_eval_mean": 0.4756,
+    "last3_evals": [
+      0.4667,
+      0.4133,
+      0.5467
+    ],
+    "reeval_secs": 203.9
+  },
+  {
+    "run_id": "phase1_repro__crl__d8__n1000000__s2__43511f71",
+    "grid": "phase1_repro",
+    "agent": "crl",
+    "depth": 8,
+    "tower": "residual",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.58,
+    "reeval_per_task": {
+      "task1": 0.06,
+      "task2": 0.02,
+      "task3": 0.98,
+      "task4": 0.9,
+      "task5": 0.94
+    },
+    "train_best_success": 0.6,
+    "last3_eval_mean": 0.5644,
+    "last3_evals": [
+      0.5067,
+      0.6,
+      0.5867
+    ],
+    "reeval_secs": 185.4
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d16__n1000000__s0__574048d8",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 16,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.684,
+    "reeval_per_task": {
+      "task1": 0.98,
+      "task2": 0.88,
+      "task3": 0.66,
+      "task4": 0.0,
+      "task5": 0.9
+    },
+    "train_best_success": 0.72,
+    "last3_eval_mean": 0.6533,
+    "last3_evals": [
+      0.64,
+      0.6933,
+      0.6267
+    ],
+    "reeval_secs": 168.1
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d16__n1000000__s1__d072c81c",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 16,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.624,
+    "reeval_per_task": {
+      "task1": 0.88,
+      "task2": 0.7,
+      "task3": 0.64,
+      "task4": 0.02,
+      "task5": 0.88
+    },
+    "train_best_success": 0.7066666666666667,
+    "last3_eval_mean": 0.6178,
+    "last3_evals": [
+      0.6133,
+      0.6267,
+      0.6133
+    ],
+    "reeval_secs": 197.2
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d16__n1000000__s2__2070db3a",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 16,
+    "tower": "residual",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.656,
+    "reeval_per_task": {
+      "task1": 0.84,
+      "task2": 0.82,
+      "task3": 0.66,
+      "task4": 0.0,
+      "task5": 0.96
+    },
+    "train_best_success": 0.68,
+    "last3_eval_mean": 0.6,
+    "last3_evals": [
+      0.5733,
+      0.6533,
+      0.5733
+    ],
+    "reeval_secs": 187.2
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d32__n1000000__s0__710b713a",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 32,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.648,
+    "reeval_per_task": {
+      "task1": 0.88,
+      "task2": 0.74,
+      "task3": 0.42,
+      "task4": 0.2,
+      "task5": 1.0
+    },
+    "train_best_success": 0.72,
+    "last3_eval_mean": 0.6667,
+    "last3_evals": [
+      0.72,
+      0.6133,
+      0.6667
+    ],
+    "reeval_secs": 245.4
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d32__n1000000__s1__86a42c07",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 32,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.616,
+    "reeval_per_task": {
+      "task1": 0.86,
+      "task2": 0.82,
+      "task3": 0.44,
+      "task4": 0.1,
+      "task5": 0.86
+    },
+    "train_best_success": 0.6666666666666667,
+    "last3_eval_mean": 0.5911,
+    "last3_evals": [
+      0.6,
+      0.5733,
+      0.6
+    ],
+    "reeval_secs": 268.6
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d32__n1000000__s2__d96b40e1",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 32,
+    "tower": "residual",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.668,
+    "reeval_per_task": {
+      "task1": 0.96,
+      "task2": 0.86,
+      "task3": 0.48,
+      "task4": 0.1,
+      "task5": 0.94
+    },
+    "train_best_success": 0.68,
+    "last3_eval_mean": 0.6044,
+    "last3_evals": [
+      0.6267,
+      0.5733,
+      0.6133
+    ],
+    "reeval_secs": 248.8
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d4__n1000000__s0__d05ba7dc",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.564,
+    "reeval_per_task": {
+      "task1": 0.94,
+      "task2": 0.74,
+      "task3": 0.44,
+      "task4": 0.0,
+      "task5": 0.7
+    },
+    "train_best_success": 0.5866666666666667,
+    "last3_eval_mean": 0.52,
+    "last3_evals": [
+      0.56,
+      0.4933,
+      0.5067
+    ],
+    "reeval_secs": 162.8
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d4__n1000000__s1__9243b475",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.532,
+    "reeval_per_task": {
+      "task1": 0.98,
+      "task2": 0.68,
+      "task3": 0.1,
+      "task4": 0.0,
+      "task5": 0.9
+    },
+    "train_best_success": 0.5333333333333334,
+    "last3_eval_mean": 0.4578,
+    "last3_evals": [
+      0.4133,
+      0.52,
+      0.44
+    ],
+    "reeval_secs": 167.1
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d4__n1000000__s2__a9f262a7",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.624,
+    "reeval_per_task": {
+      "task1": 0.94,
+      "task2": 0.78,
+      "task3": 0.58,
+      "task4": 0.0,
+      "task5": 0.82
+    },
+    "train_best_success": 0.6666666666666667,
+    "last3_eval_mean": 0.4178,
+    "last3_evals": [
+      0.44,
+      0.4,
+      0.4133
+    ],
+    "reeval_secs": 160.0
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d8__n1000000__s0__9f5598c3",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 8,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.668,
+    "reeval_per_task": {
+      "task1": 0.98,
+      "task2": 0.8,
+      "task3": 0.6,
+      "task4": 0.0,
+      "task5": 0.96
+    },
+    "train_best_success": 0.6933333333333334,
+    "last3_eval_mean": 0.5822,
+    "last3_evals": [
+      0.56,
+      0.5733,
+      0.6133
+    ],
+    "reeval_secs": 153.6
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d8__n1000000__s1__f3d576b6",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 8,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.66,
+    "reeval_per_task": {
+      "task1": 0.92,
+      "task2": 0.9,
+      "task3": 0.48,
+      "task4": 0.1,
+      "task5": 0.9
+    },
+    "train_best_success": 0.7066666666666667,
+    "last3_eval_mean": 0.6089,
+    "last3_evals": [
+      0.5867,
+      0.6133,
+      0.6267
+    ],
+    "reeval_secs": 157.5
+  },
+  {
+    "run_id": "phase1_repro__gcbc__d8__n1000000__s2__bdbef769",
+    "grid": "phase1_repro",
+    "agent": "gcbc",
+    "depth": 8,
+    "tower": "residual",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.66,
+    "reeval_per_task": {
+      "task1": 0.86,
+      "task2": 0.86,
+      "task3": 0.84,
+      "task4": 0.0,
+      "task5": 0.74
+    },
+    "train_best_success": 0.7200000000000001,
+    "last3_eval_mean": 0.6667,
+    "last3_evals": [
+      0.64,
+      0.72,
+      0.64
+    ],
+    "reeval_secs": 161.7
+  }
+]

@@ -306,7 +306,7 @@ experiment is a no-op diff; `--template` output == committed file.
 
 Extract `pipeline.py`; `run.py` and `eval.py` become subject definitions. Fold
 `--report` (currently eval-only) into the pipeline so experiments get the same
-AUTO-block results document that the evals now have — `results_phase1.md` is
+AUTO-block results document that the evals now have — `results/phase1_repro/README.md` is
 hand-maintained today and has already been wrong once (the `last3_mean` pin bug).
 
 *Verifies:* byte-identical `plan` output on all five experiments and the suite, captured
@@ -323,7 +323,7 @@ as golden files in Stage 0.
 The five generated files in §4.4, plus a root `README.md` that is an index: what this
 is, the three commands, and a table pointing at the 3,336 lines of prose that already
 exist (`offline_exp.md` = the brief, `algorithm.md` = what runs, `research_log.md` =
-verified facts, `results_phase1.md` = findings, `evals/README.md` = the eval
+verified facts, `results/*/README.md` = findings, `evals/README.md` = the eval
 architecture, `docs/reference/` = generated). [D11]
 
 ### Stage 6 — the Claude skill · ~150 ln · no risk
@@ -358,7 +358,7 @@ that does not exist yet is the same drift problem in a new place.
 2. **`--regenerate` semantics.** When a template changes, should regenerating an
    experiment preserve *every* key that differs from the template, or only keys listed
    in its `# generated-from:` header? The first is safer, the second is tidier.
-3. **Does `results_phase1.md` become an AUTO-block document** (Stage 3)? It would stop
+3. **Does `results/phase1_repro/README.md` become an AUTO-block document** (Stage 3)? It would stop
    the numbers drifting, at the cost of a one-time rewrite of a 651-line file that
    currently reads well.
 4. **How much does `docs/reference/` duplicate the skill?** Current split: the

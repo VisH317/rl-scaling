@@ -5,9 +5,9 @@
 the interpretation written under a `> **Read:**` stub is never overwritten by a
 re-run, and no number is ever copied by hand.
 
-Figures are COPIED into the repo (`offline/evals/figures/<suite>/`) rather than linked
-into scratch, so the document renders on GitHub and in an editor, and so a figure and
-the numbers beside it are versioned together.
+Figures are COPIED into the repo (`results/<suite>/`, the same folder as this
+document) rather than linked into scratch, so the document renders on GitHub and in an
+editor, and so a figure and the sentence reading it are versioned together.
 """
 
 from __future__ import annotations
@@ -30,7 +30,10 @@ TEMPLATE = os.path.join(_CODE_HERE, "RESULTS_TEMPLATE.md")
 #: Where the results document and its figures are WRITTEN. Under a submit-time code
 #: snapshot these differ, and writing beside `__file__` would bury the report in
 #: scratch. See `rl_scaling.paths.OUTPUT_REPO`.
-HERE = paths.EVALS_DOCS
+#: Where results documents and their figures are WRITTEN. Under a submit-time
+#: code snapshot this must follow OUTPUT_REPO (the live checkout), never the
+#: snapshot on scratch, or the document would be written where no one reads it.
+HERE = paths.RESULTS
 
 
 def _table(header, rows) -> str:
@@ -242,9 +245,10 @@ BLOCKS = {"meta": _meta, "checkpoints": _checkpoints, "topology": _topology,
 
 def build(cfg: dict, suite_dir: str) -> str:
     recs = _load(suite_dir)
-    out_md = os.path.join(HERE, f"results_{cfg['name']}.md")
-    fig_dir = os.path.join(HERE, "figures", cfg["name"])
-    os.makedirs(fig_dir, exist_ok=True)
+    # Document and figures share ONE folder: `results/<suite>/README.md` alongside
+    # `results/<suite>/fig*.png`, so the image paths are bare filenames.
+    fig_dir = paths.results_dir(cfg["name"])
+    out_md = os.path.join(fig_dir, "README.md")
 
     copied = 0
     for src in glob.glob(os.path.join(suite_dir, "figures", "**", "*.png"),

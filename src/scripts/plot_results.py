@@ -33,6 +33,7 @@ import numpy as np  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from offline import config as C  # noqa: E402
+from rl_scaling import paths as P  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Palette (dataviz reference instance, light mode)
@@ -114,6 +115,28 @@ def save(fig, out_dir, name, table_rows=None, table_header=None):
             w.writerows(table_rows)
         msg += f"  (+ {os.path.basename(csv_p)})"
     print(msg)
+
+
+def publish(grid: str, out_dir: str) -> int:
+    """Copy a grid's figures into `results/<grid>/`, beside the document that reads
+    them.
+
+    The figures are GENERATED into scratch (they are outputs, and scratch is where
+    outputs live) but READ from the repo, so the document renders on GitHub and a
+    figure is versioned with the sentence interpreting it. Copying is the step that
+    used to be done by hand, which is how `src/offline/figures/` came to hold a stale
+    subset.
+    """
+    import shutil
+    dest = P.results_dir(grid)
+    n = 0
+    # reeval_*.json comes with them: it is the 50-episodes/task table the documents
+    # quote their headline numbers from, so it belongs beside them, not only in scratch.
+    for pat in ("*.png", "*.csv", "reeval_*.json"):
+        for src in sorted(glob.glob(os.path.join(out_dir, pat))):
+            shutil.copy2(src, os.path.join(dest, os.path.basename(src)))
+            n += 1
+    return n
 
 
 # ---------------------------------------------------------------------------
@@ -773,6 +796,8 @@ def main() -> int:
     ap.add_argument("--out-dir")
     ap.add_argument("--heatmap", action="store_true",
                     help="also draw the depth x data heatmap (needs >1 dataset size)")
+    ap.add_argument("--no-publish", action="store_true",
+                    help="write only to scratch; skip the copy into results/<grid>/")
     args = ap.parse_args()
 
     out_dir = args.out_dir or os.path.join(C.ANALYSIS_DIR, args.grid)
@@ -792,6 +817,9 @@ def main() -> int:
     if args.heatmap or len({r["size"] for r in runs}) > 1:
         fig_heatmap(runs, out_dir, args.grid)
     print(f"figures in {out_dir}")
+    if not (args.no_publish or args.out_dir):
+        print(f"published {publish(args.grid, out_dir)} files to "
+              f"{P.results_dir(args.grid)}")
     return 0
 
 

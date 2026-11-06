@@ -1,0 +1,5 @@
+config,status,task1,task2,task3,task4,task5
+CRL  d4,finished,0.8111,0.8333,0.5333,0.0222,0.8
+CRL  d8,finished,0.8556,0.7667,0.3333,0.1667,0.9333
+CRL  d16,finished,0.6778,0.6556,0.4333,0.1778,0.7444
+CRL  d32,finished,0.4444,0.4444,0.1333,0.1222,0.4222

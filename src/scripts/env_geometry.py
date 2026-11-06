@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Maze geometry and data coverage for an OGBench maze environment.
 
-Produces the numbers in section 1 of `src/offline/results_phase1.md`: the maze map, the
+Produces the numbers in section 1 of `results/phase1_repro/README.md`: the maze map, the
 per-cell data coverage, how far one trajectory actually travels, and -- the part that
 turned out to matter -- the angle between the straight line to each task's goal and the
 first move that makes progress toward it.

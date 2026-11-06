@@ -59,6 +59,18 @@ TESTS = os.path.join(REPO, "tests")
 #: In-repo, WRITTEN -- so these follow OUTPUT_REPO, not REPO.
 DOCS = os.path.join(OUTPUT_REPO, "docs")
 EVALS_DOCS = os.path.join(OUTPUT_REPO, "src", "offline", "evals")
+#: One folder per experiment grid or eval suite, holding that result's figures AND
+#: the document that reads them. Co-located on purpose: a figure and the sentence
+#: interpreting it go stale together, and a reader should never have to join two
+#: directories by hand to see what a number refers to.
+RESULTS = os.path.join(OUTPUT_REPO, "results")
+
+
+def results_dir(name: str) -> str:
+    """`results/<grid-or-suite>/`, created on demand."""
+    d = os.path.join(RESULTS, name)
+    os.makedirs(d, exist_ok=True)
+    return d
 
 DATASET_URL = "https://rail.eecs.berkeley.edu/datasets/ogbench"
 
@@ -70,7 +82,7 @@ def shell_exports() -> str:
     """
     keys = ("SCRATCH_ROOT", "REPO", "OUTPUT_REPO", "PROJECT", "VENV", "PYTHON", "EXPERIMENTS_DIR",
             "RUNS_DIR", "CONFIGS_DIR", "ANALYSIS_DIR", "LOGS_DIR", "SLURM_LOGS_DIR",
-            "CODE_DIR", "DATA_DIR", "EXPERTS_DIR")
+            "CODE_DIR", "DATA_DIR", "EXPERTS_DIR", "RESULTS")
     g = globals()
     return "\n".join(f'RL_{k}="{g[k]}"' for k in keys)
 

@@ -2,7 +2,7 @@
   Results template for an eval suite.
 
   `src/eval.py --report` copies this to `results_<suite>.md` beside it (once, if it
-  does not exist), copies the figures into `figures/<suite>/`, and then fills every
+  does not exist), copies the figures in beside it (`results/<suite>/`), and then fills every
   `<!-- AUTO:name -->` ... `<!-- /AUTO:name -->` block with the current numbers.
 
   Everything OUTSIDE those blocks is yours and survives every regeneration, so write
@@ -54,7 +54,7 @@ shown because the between-seed spread is comparable to some depth gaps.
 
 ### 3.1 The value field
 
-![critic value field](figures/{{SUITE}}/fig1_critic_field.png)
+![critic value field](fig1_critic_field.png)
 
 `Q(s, π(s,g), g)` per spatial bin, drawn on the environment's own top-down render.
 Walls are the white blocks; hatched bins fell below the state floor and enter no metric.
@@ -65,7 +65,7 @@ log-ratio, so **only the shape is comparable across rows**, never the magnitude.
 
 ### 3.2 Does the field follow the maze?
 
-![topology](figures/{{SUITE}}/fig2_topology.png)
+![topology](fig2_topology.png)
 
 <!-- AUTO:topology -->
 <!-- /AUTO:topology -->
@@ -79,7 +79,7 @@ subtracting coordinates. Positive = the field bends around walls.
 
 ### 3.3 Where the field peaks, and whether it climbs
 
-![metrics](figures/{{SUITE}}/fig4_metrics.png)
+![metrics](fig4_metrics.png)
 
 <!-- AUTO:field -->
 <!-- /AUTO:field -->
@@ -91,13 +91,13 @@ improvement, so a field can rank well globally and still trap it in a local basi
 
 ### 3.4 Which action does the critic prefer?
 
-![action preference](figures/{{SUITE}}/fig5_action_preference.png)
+![action preference](fig5_action_preference.png)
 
 `Q(maze-correct action) − Q(straight-at-goal action)`, on the bins where those two
 directions differ by at least the split angle. Bins where they agree are drawn **pale**
 (the question does not apply); bins with no data stay **hatched** (we do not know).
 
-![action tests](figures/{{SUITE}}/fig6_action_tests.png)
+![action tests](fig6_action_tests.png)
 
 <!-- AUTO:action -->
 <!-- /AUTO:action -->

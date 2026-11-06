@@ -1,20 +1,25 @@
 # Phase 1 results — offline GCRL depth scaling on `antmaze-medium-stitch-v0`
 
-Compiled 2026-11-05, updated 13:45. Covers grids `phase1_anchor` (finished) and
-`phase1_repro` (**21 of 24 runs finished**; only CRL depth 32 is still training).
+Compiled 2026-11-05, updated 2026-11-06. Covers grids `phase1_anchor` (finished) and
+`phase1_repro` (**24 of 24 runs finished** — CRL depth 32 landed on 2026-11-06).
 
-Figures are in [`figures/`](figures/), copied from
-`/scratch/gpfs/vt7993/rl-scaling/experiments/analysis/`. Every PNG has a CSV beside it,
-and those CSVs are the source for the tables here — nothing below is typed by hand from
-terminal output.
+Figures are in this folder, PNG + CSV, published from
+`/scratch/gpfs/vt7993/rl-scaling/experiments/analysis/` by
+`python src/scripts/plot_results.py --grid phase1_repro`. Those CSVs are the source for
+the tables here — nothing below is typed by hand from terminal output.
 
 > **Headline.** `phase1_repro`'s own grid spec in `config.py` says: *"Expect CRL flat
 > with depth, GCBC rising. If CRL scales here, stop and report — that alone changes the
-> project."* **CRL scaled: 34.1 → 49.3 → 71.4 across depths 4 → 8 → 16**, all three
-> depths now finished, 3 seeds each.
+> project."* **CRL scaled: 34.1 → 49.3 → 71.4 → 79.3 across depths 4 → 8 → 16 → 32**, all
+> four depths now finished, 3 seeds each.
 >
-> Rescored at OGBench's published 50 episodes/task, the trend strengthens:
-> **34.3 → 54.7 → 78.4**.
+> Rescored at OGBench's published 50 episodes/task, the first three strengthen to
+> **34.3 → 54.7 → 78.4**; depth 32's rescore is still running.
+>
+> **Depth 32 is where it flattens.** 16 → 32 is +7.9 points against a seed SD of 5.5 —
+> real, but the smallest of the three steps after +15.2 and +22.1, and it costs 2× the
+> wall clock of depth 16 (§8). On `best_success` the step is 84.9 → 87.1, inside the
+> seed spread.
 >
 > **This is not yet a result about depth scaling offline.** Two reasons, both in §2.
 > We are not running the paper's critic loss (ours is binary NCE on dot products,
@@ -22,8 +27,13 @@ terminal output.
 > antmaze-medium-stitch is the **one** offline environment where the paper already
 > reports depth helping — its Figure 14 shows offline GCBC scaling on exactly this
 > dataset. Finding a positive here is finding one where a positive was already known;
-> the open question is whether it survives anywhere else. `humanoid_ensemble1` is that
-> test. Read §2 before §6.
+> the open question is whether it survives anywhere else.
+>
+> **It did not.** `humanoid_ensemble1` has since finished and the trend *reverses* there:
+> 64.2 → 31.3 on the same metric across the same depths. See
+> [`../humanoid_ensemble1/README.md`](../humanoid_ensemble1/README.md), including why
+> that grid moved three variables and so does not isolate the environment. Read §2
+> before §6.
 
 ---
 
@@ -326,27 +336,31 @@ and `repr_dim` — the two are *not* a controlled comparison. See §5.
 | grid | runs | finished | in flight |
 |---|---|---|---|
 | `phase1_anchor` | 6 | 6 | 0 |
-| `phase1_repro` | 24 | **21** | 3 (CRL d32, at ~29%) |
+| `phase1_repro` | 24 | **24** | 0 |
 
 ```
 2993272  crl-pack    COMPLETED  02:01:29   anchor
 2993273  crl-pack    COMPLETED  03:06:55   repro pack 1
 2993274  crl-pack    COMPLETED  03:50:51   repro pack 2
-2993275  crl-pack    RUNNING    06:09:02   repro pack 3
-2993276  crl-pack    RUNNING    03:23:17   repro pack 4
-2993575  crl-reeval  PENDING               blocked by the 2-job GPU QOS limit
+2993275  crl-pack    COMPLETED             repro pack 3
+2993276  crl-pack    COMPLETED             repro pack 4  (CRL d32)
+2993575  crl-reeval  COMPLETED             rescored the first 21 runs at 50 ep/task
+2995117  crl-reeval  RUNNING               rescoring all 24, d32 included
 ```
 
-**72.0 GPU-hours** of training wall clock across the 27 finished runs. No failures, no
-stalls, no resubmissions since the smoke gate.
+The three CRL d32 runs cost **12.1 / 16.1 / 16.2 h** each — the most expensive cell in
+the grid, and 2× depth 16 for +7.9 points. No failures, no stalls, no resubmissions
+since the smoke gate.
 
 **What is not yet measured.** Every success number below comes from the in-training
 evaluator at **15 episodes/task (75 episodes per point)**. OGBench's published commands
 use `--eval_episodes=50` (250 per point).
 
-**Job `2993575` has now rescored every finished run's `params_best.pkl` at 50** —
-`reeval@50` below, written to `analysis/<grid>/reeval_50ep.json`. That is the number
-comparable to OGBench's table. Three conventions appear throughout, and they measure
+**Job `2993575` rescored the first 21 runs' `params_best.pkl` at 50** — `reeval@50`
+below, published as `reeval_50ep.json` in this folder. That is the number comparable to
+OGBench's table. **Job `2995117` is re-running it across all 24** so depth 32 has a
+headline number too; until it lands, the depth-32 row of the reeval table is marked
+pending and the last-3 column is the one to read. Three conventions appear throughout, and they measure
 different parameters (`algorithm.md` §2.2):
 
 | convention | parameters | use |
@@ -406,7 +420,7 @@ curve. **Units:** percent of episodes, ±1 SD over 3 seeds.
 | 4 | 34.3 ± 9.9 | 57.3 ± 3.8 |
 | 8 | 54.7 ± 2.6 | 66.3 ± 0.4 |
 | 16 | **78.4 ± 8.5** | 65.5 ± 2.5 |
-| 32 | still training | 64.4 ± 2.1 |
+| 32 | pending (job `2995117`) | 64.4 ± 2.1 |
 
 **last-3 @ a fixed 1M steps** (the paper's convention, 75 episodes/point):
 
@@ -414,24 +428,23 @@ curve. **Units:** percent of episodes, ±1 SD over 3 seeds.
 |---|---|---|
 | 4 | 34.1 ± 9.8 | 53.5 ± 6.8 |
 | 8 | 49.3 ± 3.8 | 65.2 ± 1.6 |
-| 16 | **71.4 ± 1.9** | 62.5 ± 2.4 |
-| 32 | not yet at 1M \* | 61.2 ± 5.5 |
+| 16 | 71.4 ± 1.9 | 62.5 ± 2.4 |
+| 32 | **79.3 ± 5.5** | 61.2 ± 5.5 |
 
 The two agree on shape and the headline is uniformly higher, as expected from a best
 checkpoint scored over more episodes. Everything below quotes the last-3 numbers where
 a common step matters and the reeval numbers where absolute level matters.
 
-\* CRL d32 is at ~575k gradient steps. It is **excluded** rather than reported at the
-wrong step — see §11 defect 5, which is a bug that briefly did report it at the wrong
-step.
+**CRL: 34.1 → 49.3 → 71.4 → 79.3 across an 8× depth change** (last-3 at a common 1M),
+far outside the seed spread. At depth 16 CRL reaches 78% on the reeval metric, against
+OGBench's published 53% for the same agent on the same data. The spread also *tightens*
+with depth over the first three points (SD 9.8 → 3.8 → 1.9), which is not what noise
+does, before widening again at 32 (5.5).
 
-**CRL: 34.3 → 54.7 → 78.4 across a 4× depth change** (reeval@50), far outside the seed
-spread. At depth 16 CRL reaches 78%, against OGBench's published 53% for the same agent
-on the same data. On the common-step metric the spread also *tightens* with depth
-(SD 9.8 → 3.8 → 1.9), which is not what noise does.
-
-CRL d32's partial evidence points higher still: its per-task scores at ~575k steps
-(§7) already exceed d16's final ones on four of five tasks. Treat as a lower bound.
+**The gains are decelerating:** +15.2, +22.1, +7.9 for each doubling. Depth 32 also
+costs 2× depth 16's wall clock (§8). On `best_success` the flattening is starker still
+— 84.9 → 87.1, well inside the seed spread — so *how much* depth 32 adds depends on the
+metric, while *that it adds something* holds on both.
 
 **GCBC saturates at depth 8**: reeval@50 57.3 → 66.3 → 65.5 → 64.4, i.e. a real gain
 from 4 to 8 (SDs 3.8 and 0.4, non-overlapping) and flat thereafter. (A reference value of 0.63 at depth 32 is recorded in our
@@ -497,10 +510,15 @@ sit between 0.9991 and 0.9993. `fig3` labels it as such. See `algorithm.md` §3.
 4. **Depth and parameter count are confounded.** Width is fixed at 256, so deeper is
    also bigger: CRL d4 = 1.45M params, d8 = 2.77M. A width-matched control is **not** in
    the grid. The `plain_mlp` preset isolates residual-vs-plain but not depth-vs-size.
-5. **d32 is unfinished** (~575k of 2M steps) and has no 1M-step value. Depths 4, 8 and
-   16 are complete at 3 seeds each.
-6. **Resolved at 15 episodes during training**; `reeval@50` has now rescored every finished run, and the shape held.
-7. **One dataset, one environment.** Everything here is `antmaze-medium-stitch-v0`. `humanoid_ensemble1` (8 runs, queued) is the generalization test.
+5. **All four depths are now complete** at 3 seeds each. The d32 runs stopped on
+   plateau between 1.0M and 1.6M steps.
+6. **Resolved at 15 episodes during training**; `reeval@50` rescored the first 21 runs
+   and the shape held. The all-24 rescore including d32 is running (`2995117`).
+7. **One dataset, one environment.** Everything here is `antmaze-medium-stitch-v0`.
+   `humanoid_ensemble1` was the generalization test and it has now finished: the trend
+   **reverses** there. That does not retract anything in this document, but it bounds
+   what it generalises to — see
+   [`../humanoid_ensemble1/README.md`](../humanoid_ensemble1/README.md).
 
 ---
 
@@ -514,7 +532,7 @@ fraction of episodes in `[0, 1]`.
 | CRL d4 (residual) | 0.10 | 0.43 | 0.83 | 0.13 | 0.16 |
 | CRL d8 | 0.04 | 0.16 | 0.87 | 0.49 | 0.94 |
 | CRL d16 | 0.15 | 0.73 | 0.93 | **0.76** | 0.89 |
-| CRL d32 \* | 0.53 | 0.55 | 0.93 | **0.93** | 0.96 |
+| CRL d32 | 0.59 | 0.63 | 0.94 | **0.93** | 0.85 |
 | GCBC d4 | 0.94 | 0.60 | 0.24 | **0.00** | 0.54 |
 | GCBC d8 | 0.95 | 0.70 | 0.52 | **0.00** | 0.93 |
 | GCBC d16 | 0.94 | 0.82 | 0.39 | **0.00** | 0.96 |
@@ -522,12 +540,10 @@ fraction of episodes in `[0, 1]`.
 | CRL d4 (stock MLP, anchor) | 0.74 | 0.69 | 0.10 | **0.01** | 0.74 |
 | GCBC d4 (stock MLP, anchor) | 0.78 | 0.33 | 0.19 | **0.00** | 0.56 |
 
-\* CRL d32 is still training (~575k steps); its row is a lower bound, and the `status`
-column of `fig6_per_task.csv` marks it.
-
 1. **Task 4 — the forced 180° detour — is solved only by a deep contrastive critic.**
    0.00 for GCBC at depths 4/8/16 and every seed, ~0.00 for both agents under the stock
-   architecture, and 0.13 → 0.49 → 0.76 → 0.93 for CRL as depth goes 4 → 8 → 16 → 32. A
+   architecture, and 0.13 → 0.49 → 0.76 → 0.93 for CRL as depth goes 4 → 8 → 16 → 32 —
+   now measured on finished runs at all four depths. A
    phase transition on one task, not a uniform lift, and it is most of CRL's aggregate
    gain. GCBC reaches 0.12 only at depth 32 — a hint that enough depth eventually helps
    the policy too, but two orders of magnitude behind CRL.
@@ -566,7 +582,8 @@ third the parameters and a quarter the wall clock.
 
 ## 9. Figures
 
-All in [`figures/<grid>/`](figures/), PNG + CSV.
+All in this folder, PNG + CSV, regenerated by
+`python src/scripts/plot_results.py --grid phase1_repro`.
 
 | file | what it answers |
 |---|---|
@@ -578,22 +595,36 @@ All in [`figures/<grid>/`](figures/), PNG + CSV.
 | `fig6_per_task` | §7 — the 5 tasks × 9 configs heatmap |
 | `fig5_depth_data_heatmap` | not generated; needs >1 dataset size (phase 3) |
 
+![success vs depth](fig1_success_vs_depth.png)
+
+![last3 vs depth](fig1b_last3_vs_depth.png)
+
+![per task](fig6_per_task.png)
+
 ---
 
 ## 10. What this changes
 
-**Running now.** `humanoid_ensemble1` — 8 runs, ~71 GPU-h, queued as `2993926`/`2993927`.
-Same binary-NCE critic, single critic ensemble, depths 4/8/16/32, 2 seeds, on
-`humanoidmaze-medium-navigate-v0`. Same 8×8 maze and same five (start, goal) pairs as
-antmaze-medium, different body (ob 69, act 21, 2000-step episodes) and `-navigate`
-rather than `-stitch`, so far less stitching is required. **This is the test of whether
-§6 is about depth or about one dataset.**
+**Done, and it answered no.** `humanoid_ensemble1` — the 8 runs that were queued as
+`2993926`/`2993927` — has finished. It was the test of whether §6 is about depth or
+about one dataset, and **depth scaling does not survive the move**: 64.2 → 63.3 → 54.4 →
+31.3 on the same common-step metric, monotonically down, with the deep runs peaking at
+200k steps and then losing half their score. The critic nonetheless gets *better* at its
+own contrastive objective with depth there, by the same margin as here.
+
+That grid moved three variables at once (dataset, `critic_ensemble` 2→1, `discount`
+0.99→0.995), so it does not isolate the environment, and the cheapest run that would —
+antmaze with `critic_ensemble: 1` at depths 4 and 32 — has not been done. Full write-up
+and the discriminating experiments: [`../humanoid_ensemble1/README.md`](../humanoid_ensemble1/README.md).
 
 **Then: mechanistic interpretability on the trained critics.** The §6 result says a
 deeper critic is better, and §6.1 says we cannot tell from behaviour alone whether that
 is the critic or the actor. Probing the critic directly is the way past that, and we now
 have a depth ladder of checkpoints to probe — the same architecture at 4/8/16/32 trained
-on identical data. Starting points, in order:
+on identical data. **The first of these has been run** — see
+[`../interp01/README.md`](../interp01/README.md), which finds the critic's value field
+becomes *less* aligned with true geodesic distance as depth rises (ρ 0.63 → 0.53 → 0.46)
+even as success rises. Starting points, in order:
 
 1. **What does `ψ(g)` encode?** Linear-probe the goal representation for maze cell,
    `(x, y)`, and BFS distance to each of the five task goals. If depth buys a better
