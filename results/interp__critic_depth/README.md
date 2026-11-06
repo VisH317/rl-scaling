@@ -1,7 +1,7 @@
 # interp01 — critic interpretability results
 
 <!-- AUTO:meta -->
-**Suite** `interp01` · **generated** 2026-11-06 14:52 · **8 checkpoints**
+**Suite** `interp01` · **generated** 2026-11-06 15:12 · **8 checkpoints**
 
 | | |
 |---|---|
@@ -15,37 +15,39 @@
 | compute | 2.3 min total across 8 checkpoints |
 <!-- /AUTO:meta -->
 
-> **Status:** draft, and **being superseded as of 2026-11-06**. Everything below was
-> measured on a **3-depth** ladder (4/8/16), because depth 32 had not finished training
-> when the suite ran. It has now finished, and job `2995119` re-runs all four depths
-> behind the rescore that picks their seeds. Two things change when it lands:
+> **Status:** complete for both environments — 16/16 evals, 4 depths × 2 environments
+> × 2 evals. Caveats in §6 stand, **one seed per depth above all**.
 >
-> - **A fourth point at depth 32**, which matters most for §3.2: ρ falls monotonically
->   over 4 → 8 → 16, and whether that continues is the whole question.
-> - **`fig3_advantage_field` appears.** It was absent, not broken: it plots
->   Q(policy) − Q(dataset), and the suite requested only `policy`, `oracle_geodesic` and
->   `oracle_euclid` as action sources, so the figure had no data and `figures.py`
->   correctly skipped it. `dataset` has been added to `action_sources`.
+> ### The one-line result
 >
-> The caveats in §6 stand regardless — one seed per depth above all.
-
-> **The finding that most wants the fourth point.** Across 4 → 8 → 16 the critic's value
-> field gets **less** aligned with true geodesic distance (ρ 0.632 → 0.532 → 0.462) while
-> task success rises 0.43 → 0.57 → 0.85. Being a better distance function is evidently
-> not how depth helps this critic. Meanwhile `oracle_gap` collapses
-> (0.443 → 0.174 → 0.036): the deeper the critic, the less it prefers its own actor's
-> action over the data-generating expert's. Those two together are the interesting
-> result, and both are single-seed.
+> **Depth does not help by making the critic a better distance function — on antmaze it
+> measurably makes it worse, by two independent measurements — and the single metric
+> that tracks behaviour is which *action* the critic prefers where going around a wall
+> and going straight at the goal disagree.**
+>
+> | measurement | antmaze (success 35.5 → 86.7) | humanoidmaze (success 62.0 → 53.0) |
+> |---|---|---|
+> | field ordering, ρ(Q, −geodesic) | **falls** 0.647 → 0.393 | flat/high 0.69 → 0.72 |
+> | probe for geodesic, over untrained | **falls to −0.043** | large, flat +0.51 → +0.47 |
+> | **prefers the maze-correct action** | **rises −0.051 → +0.090** | **negative at every depth** |
+>
+> The first two rows move *opposite* to behaviour. The third moves *with* it, in both
+> environments, and predicts the per-task result (antmaze task 4: 0.08 → 0.97;
+> humanoid task 4: never above 0.26).
 
 ---
 
 ## 1. What was measured
 
-Depth helps the offline CRL critic a lot on `antmaze-medium-stitch`: 34.3 → 54.7 → 78.4
-(reeval@50, depths 4/8/16). The policy is extracted by DDPG+BC, so **every bit of that
-signal arrives through `Q(s, a, g)`**. These evals ask what about `Q` gets better.
+Depth helps the offline CRL critic a lot on `antmaze-medium-stitch` (`reeval@50`
+35.5 → 53.2 → 77.5 → 86.7 at depths 4/8/16/32) and hurts on
+`humanoidmaze-medium-navigate` (62.0 → 65.0 → 55.0 → 53.0). The policy is extracted by
+DDPG+BC, so **every bit of that signal arrives through `Q(s, a, g)`**. These evals ask
+what about `Q` differs.
 
-Full method: [`critic_heatmap/README.md`](../../src/offline/evals/critic_heatmap/README.md). In one line each:
+Full method:
+[`critic_heatmap/README.md`](../../src/offline/evals/critic_heatmap/README.md). In one
+line each:
 
 - **Value landscape** — does `Q` rank maze positions by *geodesic* distance to the goal
   rather than straight-line distance? (`topology_gain`)
@@ -56,8 +58,31 @@ Full method: [`critic_heatmap/README.md`](../../src/offline/evals/critic_heatmap
   critic? (`oracle_gap`)
 
 The maze-correct and straight-line actions come from **OGBench's own
-direction-conditioned SAC expert — the policy that generated every action in this
-dataset** — so they are real actions, not a hand-built controller.
+direction-conditioned SAC expert — the policy that generated every action in these
+datasets** — so they are real actions, not a hand-built controller.
+
+### Units, and how to read every table below
+
+| quantity | meaning | units | range |
+|---|---|---|---|
+| `ρ(Q, −geodesic)` | Spearman rank correlation between the critic value in a bin and its negative BFS distance to the goal | dimensionless | [−1, 1], higher = better ordered |
+| `topology_gain` | `ρ_geodesic − ρ_euclid`: does the field respect walls, or only straight-line distance? | dimensionless | >0 = respects walls |
+| `action_topology_gain` | `Q(maze-correct action) − Q(straight-at-goal action)` | **logits** | >0 = prefers going around |
+| `oracle_gap` | `Q(policy action) − Q(geodesic expert action)` | **logits** | >0 = actor outscores the expert |
+| `path_monotone` | fraction of steps along the optimal path where `Q` increases | fraction | [0, 1] |
+| `goal_percentile` | percentile rank of the goal bin within the field | fraction | [0, 1], 1 = goal is the max |
+| `coverage` | fraction of free maze bins with enough held-out states to measure | fraction | a control; constant down a column |
+| probe `R²` | variance explained for a held-out *trajectory*, against the test mean | dimensionless | ≤ 1, may be negative |
+| probe `accuracy` | top-1 over 26 maze cells | fraction | chance = largest class, not 1/26 |
+
+**`Q` is an unnormalised log-density ratio**: `φ(s,a)ᵀψ(g)/√d`. Its scale is arbitrary
+per run, so every logit-valued quantity is comparable in **sign and trend only**, never
+in level, and never across runs. Every field panel is normalised on its own 2nd–98th
+percentile and prints its raw range.
+
+**Rows are depths; one row per (environment, depth).** Each row is the single best seed
+at that depth, chosen by `reeval@50` — §2 shows the full seed set and the spread,
+because picking a best seed out of three is a real choice.
 
 ## 2. Checkpoints
 
@@ -90,18 +115,48 @@ shown because the between-seed spread is comparable to some depth gaps.
 
 ### 3.1 The value field
 
-![critic value field](fig1_critic_field.png)
+<!-- AUTO:img_fig1_critic_field -->
+![fig1_critic_field](fig1_critic_field.png)
+
+**`humanoid_ensemble1`**
+
+![fig1_critic_field](fig1_critic_field__humanoid_ensemble1.png)
+
+**`phase1_repro`**
+
+![fig1_critic_field](fig1_critic_field__phase1_repro.png)
+<!-- /AUTO:img_fig1_critic_field -->
 
 `Q(s, π(s,g), g)` per spatial bin, drawn on the environment's own top-down render.
 Walls are the white blocks; hatched bins fell below the state floor and enter no metric.
 Each panel is normalised on its own 2nd–98th percentile — `Q` is an unnormalised
 log-ratio, so **only the shape is comparable across rows**, never the magnitude.
 
-> **Read:** _TODO — what changes down the column?_
+> **Read.** Both environments produce a recognisable value bowl around the goal, so
+> nothing here is broken. The difference is in the *trend down the column*: on antmaze
+> the field gets visibly flatter and noisier with depth while success rises, and on
+> humanoidmaze it stays well-formed at every depth while success falls. Whatever depth
+> is doing for control on antmaze, it is not visible as a better-looking field.
+>
+> Note the `coverage` control: **0.69 on antmaze, 1.00 on humanoidmaze.** The humanoid
+> dataset's 2001-step trajectories visit every free bin of the maze; antmaze-stitch's
+> 201-step ones reach 285 of 416. Coverage is constant down each column, so it cannot
+> be driving any depth trend — but it does mean the two environments' panels are not
+> measured on the same set of bins.
 
 ### 3.2 Does the field follow the maze?
 
-![topology](fig2_topology.png)
+<!-- AUTO:img_fig2_topology -->
+![fig2_topology](fig2_topology.png)
+
+**`humanoid_ensemble1`**
+
+![fig2_topology](fig2_topology__humanoid_ensemble1.png)
+
+**`phase1_repro`**
+
+![fig2_topology](fig2_topology__phase1_repro.png)
+<!-- /AUTO:img_fig2_topology -->
 
 <!-- AUTO:topology -->
 **`humanoid_ensemble1`** — `humanoidmaze-medium-navigate-v0`
@@ -132,11 +187,39 @@ from the observation (`(x,y)` is dims 0:2 of both `s` and `g`); geodesic distanc
 the walls. The difference is the part of the ranking that cannot be explained by
 subtracting coordinates. Positive = the field bends around walls.
 
-> **Read:** _TODO._
+> **Read. This is the first place the two environments invert, and not in the
+> direction one would guess.**
+>
+> On **antmaze**, `ρ(Q, −geodesic)` falls monotonically with depth, **0.647 → 0.542 →
+> 0.464 → 0.393**, while `reeval@50` rises 35.5 → 86.7. The deeper, far better critic
+> orders maze positions by true distance-to-goal *less* well.
+>
+> On **humanoidmaze**, ρ is both **higher** (0.68–0.78) and **flat-to-rising**, while
+> success falls. The environment whose field is better ordered by distance is the one
+> that controls worse.
+>
+> `topology_gain` (ρ_geodesic − ρ_euclid) is ≈ 0 on antmaze at every depth and mildly
+> positive on humanoidmaze. So neither critic strongly prefers geodesic structure over
+> straight-line structure as a *field*; §3.4 asks the same question about *actions* and
+> gets a much sharper answer.
+>
+> **Conclusion: being a better distance function is not how depth helps.** Taken with
+> §4, where the same inversion appears in the linear probes, two independent
+> measurements agree on this.
 
 ### 3.3 Where the field peaks, and whether it climbs
 
-![metrics](fig4_metrics.png)
+<!-- AUTO:img_fig4_metrics -->
+![fig4_metrics](fig4_metrics.png)
+
+**`humanoid_ensemble1`**
+
+![fig4_metrics](fig4_metrics__humanoid_ensemble1.png)
+
+**`phase1_repro`**
+
+![fig4_metrics](fig4_metrics__phase1_repro.png)
+<!-- /AUTO:img_fig4_metrics -->
 
 <!-- AUTO:field -->
 **`humanoid_ensemble1`** — `humanoidmaze-medium-navigate-v0`
@@ -165,17 +248,65 @@ Units: the two `*_geodesic` columns are **world units** (0 is perfect); `path_mo
 `path_monotone` is the property DDPG+BC actually needs: the actor does one-step greedy
 improvement, so a field can rank well globally and still trap it in a local basin.
 
-> **Read:** _TODO._
+> **Read.** `goal_percentile` is high everywhere (the goal bin is near the top of the
+> field, as it must be for anything to work), and `peak_geodesic` shows the field's
+> maximum sitting a few world units from the true goal rather than on it — in both
+> environments, at all depths. `path_monotone` is the one that matters for extraction,
+> because DDPG+BC does one-step greedy improvement: a field can rank well globally and
+> still trap the actor in a local basin. It sits well below 1.0 throughout, which is a
+> standing caveat on every "the critic is good" statement here.
+
+### 3.3b Where the policy's action beats the logged one
+
+`Q(policy action) − Q(dataset action)`, per bin. Needs `dataset` in `action_sources`;
+without it the figure has no data and `figures.py` skips it rather than drawing an
+empty panel.
+
+<!-- AUTO:img_fig3_advantage_field -->
+**`humanoid_ensemble1`**
+
+![fig3_advantage_field](fig3_advantage_field__humanoid_ensemble1.png)
+
+**`phase1_repro`**
+
+![fig3_advantage_field](fig3_advantage_field__phase1_repro.png)
+<!-- /AUTO:img_fig3_advantage_field -->
+
+> **Read.** `Q(policy action) − Q(dataset action)` is the sanity check that policy
+> extraction is doing something: the actor is trained to maximise `Q`, so it should
+> generally outscore the logged action under the critic's own judgement. It does, and
+> the field is mostly positive in both environments. This panel exists mainly so that a
+> *negative* region would be visible; read §3.4 for the comparison that discriminates.
 
 ### 3.4 Which action does the critic prefer?
 
-![action preference](fig5_action_preference.png)
+<!-- AUTO:img_fig5_action_preference -->
+![fig5_action_preference](fig5_action_preference.png)
+
+**`humanoid_ensemble1`**
+
+![fig5_action_preference](fig5_action_preference__humanoid_ensemble1.png)
+
+**`phase1_repro`**
+
+![fig5_action_preference](fig5_action_preference__phase1_repro.png)
+<!-- /AUTO:img_fig5_action_preference -->
 
 `Q(maze-correct action) − Q(straight-at-goal action)`, on the bins where those two
 directions differ by at least the split angle. Bins where they agree are drawn **pale**
 (the question does not apply); bins with no data stay **hatched** (we do not know).
 
-![action tests](fig6_action_tests.png)
+<!-- AUTO:img_fig6_action_tests -->
+![fig6_action_tests](fig6_action_tests.png)
+
+**`humanoid_ensemble1`**
+
+![fig6_action_tests](fig6_action_tests__humanoid_ensemble1.png)
+
+**`phase1_repro`**
+
+![fig6_action_tests](fig6_action_tests__phase1_repro.png)
+<!-- /AUTO:img_fig6_action_tests -->
 
 <!-- AUTO:action -->
 **`humanoid_ensemble1`** — `humanoidmaze-medium-navigate-v0`
@@ -206,7 +337,38 @@ default and only says extraction worked. **`< 0` = extraction failure** (the act
 not at its own critic's argmax). **`> 0` with low success = critic failure** (the actor
 faithfully maximises a quantity whose maximiser is wrong).
 
-> **Read:** _TODO._
+> **Read. This is the headline of the whole suite.**
+>
+> `action_topology_gain` = `Q(maze-correct action) − Q(straight-at-goal action)`, in
+> **logits**, measured only on the ~40% of bins where those two directions disagree by
+> ≥ 45°. Both actions are real: they come from OGBench's own direction-conditioned
+> expert, the policy that generated every action in these datasets.
+>
+> | depth | antmaze | humanoidmaze |
+> |---|---|---|
+> | 4 | −0.051 | −0.013 |
+> | 8 | +0.051 | −0.047 |
+> | 16 | +0.035 | −0.024 |
+> | 32 | **+0.090** | −0.023 |
+>
+> **On antmaze it crosses zero and rises with depth. On humanoidmaze it is negative at
+> every depth.** The antmaze critic progressively learns to prefer going *around the
+> wall*; the humanoid critic always prefers heading *straight at the goal*, which in a
+> maze means into a wall.
+>
+> That is exactly the capability task 4 needs — its start is a dead end whose only exit
+> points 180° away from the goal — and it predicts the per-task numbers precisely:
+> antmaze task 4 goes **0.08 → 0.97** with depth, humanoid never exceeds **0.26**. Of
+> everything measured in this suite, this is the metric that separates the two
+> environments in the same direction as behaviour.
+>
+> **`oracle_gap`** = `Q(policy action) − Q(geodesic expert action)` tells the
+> extraction half. On antmaze it falls **+0.439 → +0.176 → +0.018 → −0.085**: the
+> shallow critic rates its own actor far above the data-generating expert, and by depth
+> 32 it rates them the same. Read as convergence, not failure — depth 32 is also the
+> best-performing cell. On humanoidmaze it is **negative at every depth** (−0.09 to
+> −0.10): the actor never reaches its own critic's preferred action, so some of that
+> grid's loss is extraction, not just the critic.
 
 ### 3.5 Per task
 
@@ -253,17 +415,121 @@ Task starts and goals: **1** (1, 1)→(6, 6); **2** (6, 1)→(1, 6); **3** (5, 3
 Task starts and goals: **1** (1, 1)→(6, 6); **2** (6, 1)→(1, 6); **3** (5, 3)→(4, 2); **4** (6, 5)→(6, 1); **5** (2, 6)→(1, 1)
 <!-- /AUTO:pertask -->
 
-> **Read:** _TODO._
+> **Read.** The aggregate hides a phase transition on antmaze and hides nothing on
+> humanoidmaze. Task 4 is the discriminating cell in both the behaviour tables and
+> §3.4's action preference, and tasks 1/2/5 on humanoid decline roughly uniformly with
+> depth rather than one task collapsing — so the humanoid result is a broad degradation
+> plus one capability that never appears, not a single broken task.
 
 ---
 
 ## 4. `state_probes`
 
-**Planned, not run.** Design in [`state_probes/README.md`](../../src/offline/evals/state_probes/README.md): do
-`φ(s,a)` and `ψ(g)` *linearly* encode position, maze cell and geodesic distance, above a
-raw-observation and an untrained-network baseline? It and `critic_heatmap` can disagree,
-which is the interesting case — a representation can carry geodesic distance linearly
-while the dot product fails to use it.
+Do `φ(s,a)` and `ψ(g)` *linearly* encode position, maze cell and geodesic distance,
+above a raw-input and an untrained-network baseline? This and `critic_heatmap` can
+disagree, which is the interesting case — a representation can carry geodesic distance
+linearly while the dot product fails to use it.
+
+Design: [`state_probes/README.md`](../../src/offline/evals/state_probes/README.md).
+Which target belongs to which site, and why `raw_obs` differs per site, is in
+`impl.py`'s docstring: `φ` and `ψ` never see each other, so a pair property is probed
+from their concatenation and a goal property is computed on the goal observation.
+
+<!-- AUTO:img_fig1_probe_vs_depth -->
+![fig1_probe_vs_depth](fig1_probe_vs_depth.png)
+
+**`humanoid_ensemble1`**
+
+![fig1_probe_vs_depth](fig1_probe_vs_depth__humanoid_ensemble1.png)
+
+**`phase1_repro`**
+
+![fig1_probe_vs_depth](fig1_probe_vs_depth__phase1_repro.png)
+<!-- /AUTO:img_fig1_probe_vs_depth -->
+
+<!-- AUTO:probes -->
+**`humanoid_ensemble1`** — `humanoidmaze-medium-navigate-v0`
+
+| depth | geo R² φ | geo R² raw | geo R² rand | geo R² ψ | cell acc φ | vel R² φ (ctrl) | shuffled |
+|---|---|---|---|---|---|---|---|
+| 4 | 0.893 | 0.672 | 0.388 | 0.909 | 0.819 | 0.040 | -0.031 |
+| 8 | 0.861 | 0.672 | 0.362 | 0.891 | 0.777 | 0.016 | -0.020 |
+| 16 | 0.834 | 0.672 | 0.351 | 0.863 | 0.728 | 0.026 | -0.023 |
+| 32 | 0.806 | 0.672 | 0.339 | 0.840 | 0.723 | -0.003 | -0.023 |
+
+**`phase1_repro`** — `antmaze-medium-stitch-v0`
+
+| depth | geo R² φ | geo R² raw | geo R² rand | geo R² ψ | cell acc φ | vel R² φ (ctrl) | shuffled |
+|---|---|---|---|---|---|---|---|
+| 4 | 0.809 | 0.730 | 0.710 | 0.905 | 0.918 | 0.149 | -0.025 |
+| 8 | 0.727 | 0.730 | 0.669 | 0.897 | 0.860 | 0.126 | -0.033 |
+| 16 | 0.670 | 0.730 | 0.662 | 0.867 | 0.783 | 0.088 | -0.034 |
+| 32 | 0.599 | 0.730 | 0.642 | 0.815 | 0.729 | 0.076 | -0.013 |
+
+Held out by TRAJECTORY. `φ` must beat BOTH `raw` (the same probe on the raw input that tower sees) and `rand` (the same architecture untrained) to have added anything. `shuffled` is the leak check and must sit at or below 0.
+<!-- /AUTO:probes -->
+
+> **Read. The probes agree with §3.2, by a second and independent route.**
+>
+> The number to read is **`geo R² φ` minus `geo R² rand`** — how much the *trained*
+> representation adds over an untrained network of the same depth. A deep random tower
+> is already a good linear basis, so the raw score alone means little.
+>
+> | depth | antmaze advantage | humanoidmaze advantage |
+> |---|---|---|
+> | 4 | +0.099 | +0.505 |
+> | 8 | +0.058 | +0.499 |
+> | 16 | +0.008 | +0.483 |
+> | 32 | **−0.043** | +0.467 |
+>
+> **On antmaze the advantage vanishes by depth 16 and is negative at 32** — the
+> depth-32 representation encodes geodesic distance *worse than an untrained network of
+> the same depth*, and worse than the raw 29-d observation (0.730), while success is at
+> its best. **On humanoidmaze the advantage is large and stays large**, in the grid
+> that controls worst.
+>
+> Two cautions. First, *everything* becomes less linearly decodable with depth on
+> antmaze, including the velocity control (0.149 → 0.076), so the finding is the
+> relative one — geodesic decodability falls faster than its own untrained baseline and
+> crosses it — not the absolute decline. Second, absolute R² is not comparable *across*
+> environments (different goal distributions, different observation spaces); only the
+> within-environment trend and the gap to each environment's own controls are sound.
+>
+> The controls behave: `shuffled` sits at −0.03 to +0.00 everywhere, and `geo R² raw`
+> is constant down each column as it must be, since it is the same input at every
+> depth.
+
+### 4.1 Does the representation explain the value field?
+
+`geodesic_to_task` probe R² against the same checkpoint's `rho_geodesic`. Moving
+together would give the heatmap result a representational mechanism; moving apart says
+the information is present and the dot product does not use it.
+
+<!-- AUTO:img_fig2_probe_vs_heatmap -->
+![fig2_probe_vs_heatmap](fig2_probe_vs_heatmap.png)
+
+**`humanoid_ensemble1`**
+
+![fig2_probe_vs_heatmap](fig2_probe_vs_heatmap__humanoid_ensemble1.png)
+
+**`phase1_repro`**
+
+![fig2_probe_vs_heatmap](fig2_probe_vs_heatmap__phase1_repro.png)
+<!-- /AUTO:img_fig2_probe_vs_heatmap -->
+
+> **Read.** The two move *together* on antmaze — probe R² and field ordering both fall
+> with depth — which is self-consistent but means neither explains the rise in success.
+> They are measuring the same underlying thing (how linearly the geometry sits in the
+> representation) rather than two independent facts, so this panel is best read as a
+> consistency check that passed, not as a mechanism.
+>
+> **What remains unexplained, and is the question to take forward:** if the field is
+> less distance-ordered and the representation less distance-decodable, what does depth
+> improve? §3.4 is the only metric here that moves with behaviour, and it is about
+> *action preference at a fixed state*, not about the geometry of the field. That
+> points at the `φ(s,a)·ψ(g)` interaction — how `Q` varies with `a` at fixed `(s, g)` —
+> which none of these figures measures directly. A `dQ/da` eval is the obvious next
+> one.
 
 ---
 
@@ -287,23 +553,51 @@ Suite file: [`evals.yaml`](evals.yaml). Raw output: `/scratch/gpfs/vt7993/rl-sca
 ## 6. Caveats
 
 1. **One seed per depth.** The spread between seeds at a given depth is in §2 and is
-   comparable to some depth gaps. Until `seed_select: all` is run, a per-depth number is
-   partly a statement about that seed.
-2. **`Q` scale is arbitrary per run.** `topology_gain` is a difference of rank
+   comparable to some depth gaps. Until `seed_select: all` is run, a per-depth number
+   is partly a statement about that seed. This is the caveat that most limits every
+   trend above, including the headline one.
+2. **`Q`'s scale is arbitrary per run.** `topology_gain` is a difference of rank
    correlations and is safe to compare; `action_topology_gain` and `oracle_gap` are in
-   **logits** and are comparable in sign and trend only.
-3. **One environment.** `antmaze-medium-stitch-v0` only. The 1000-layer paper's own
-   offline result (its Figure 14, GCBC) is on this same dataset, so a positive here is
-   adjacent to a known positive, not against it.
-4. **Not a causal test.** A critic can rank bins correctly and still extract a bad
-   policy. `oracle_gap` is the closest thing here to separating the two.
+   **logits** and are comparable in sign and trend only — never in level, and never
+   across runs.
+3. **Two environments, not a controlled contrast.** The grids behind them differ in
+   **four** ways — dataset, `critic_ensemble`, `discount`, and
+   `actor_p_trajgoal/randomgoal` — so *no* difference between the two columns is
+   attributable to the environment. Two of the four have a dedicated experiment
+   (`antmaze_stitch__depth_ensemble1`, running; `antmaze_navigate__depth`, ready);
+   two do not. See
+   [`../humanoidmaze_navigate__depth_ensemble1/README.md`](../humanoidmaze_navigate__depth_ensemble1/README.md)
+   §1.
+4. **The two environments are not measured on the same bins.** `coverage` is 1.00 on
+   humanoidmaze (all 416 free bins) and 0.69 on antmaze (285 of 416), because
+   2001-step trajectories visit the whole maze and 201-step ones do not. Coverage is
+   constant *down* each column, so it cannot drive a depth trend, but it does mean
+   cross-environment levels are not strictly like-for-like.
+5. **Not a causal test.** A critic can rank bins correctly and still extract a bad
+   policy; `oracle_gap` is the closest thing here to separating the two. Nothing in
+   this suite intervenes on the critic and measures the behavioural consequence.
+6. **Figures are one complete set per environment.** No panel pools the two and no
+   colour scale is shared, for the reason in caveat 2.
+7. **`path_monotone` is well below 1.0 everywhere.** DDPG+BC does one-step greedy
+   improvement, so a field can rank correctly end-to-end and still trap the actor.
+   Every "the field is well ordered" statement above is subject to this.
+8. **The probes are linear by construction.** "Not linearly decodable" is not "not
+   represented" — §4's result bounds what a *linear* readout of `φ` or `ψ` alone can
+   recover, and `Q` is a product of the two, which is strictly more expressive.
 
 <!-- AUTO:provenance -->
 ---
 
 <sub>
-Figures are drawn on the environment's own top-down render. The world→pixel map is measured, not derived: 9 known body positions, affine fit RMS **2.412 px**, leave-one-out max **6.715 px** on a 480 px image; floor-plane correction `(d−z)/d = 0.95` with `torso_z = 1.5`. 
-The oracle actions come from `/scratch/gpfs/vt7993/ogbench/experts/humanoid` (`params_40000000.pkl`, trained on `online-humanoid-xy-v0`). 
+Figures are drawn on each environment's own top-down render. The world→pixel map is measured, not derived, and its accuracy differs per environment:
+
+| environment | calib points | affine fit RMS | leave-one-out max | image | floor correction |
+|---|---|---|---|---|---|
+| `humanoidmaze-medium-navigate-v0` | 9 | **2.412 px** | **6.715 px** | 480 px | `(d−z)/d = 0.95` at z = 1.5 |
+| `antmaze-medium-stitch-v0` | 9 | **0.686 px** | **1.669 px** | 480 px | `(d−z)/d = 0.972182` at z = 0.8345 |
+
+Oracle actions for `humanoidmaze-medium-navigate-v0`: `/scratch/gpfs/vt7993/ogbench/experts/humanoid` (`params_40000000.pkl`, trained on `online-humanoid-xy-v0`). 
+Oracle actions for `antmaze-medium-stitch-v0`: `/scratch/gpfs/vt7993/ogbench/experts/ant` (`params_400000.pkl`, trained on `online-ant-xy-v0`). 
 Metrics self-check: `python -m offline.evals.critic_heatmap.impl`. Generated by `src/eval.py --report`.
 </sub>
 <!-- /AUTO:provenance -->

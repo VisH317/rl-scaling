@@ -343,7 +343,11 @@ def _metric_lines(recs, out_dir, name, title, panels, key="q_policy"):
         if len(metrics) == 1 and metrics[0] == "topology_gain":
             ax.axhline(0.0, color=P.AXIS, lw=1.0, ls=(0, (4, 3)), zorder=1)
         # The title names the measure; repeating it on the y-axis is noise.
-        P.style_axes(ax, xlabel="depth (residual blocks)", title=label)
+        # Title left-aligned and set directly: a centred title on a narrow axis runs
+        # into its neighbour's, which is what happened at the default width.
+        P.style_axes(ax, xlabel="depth (residual blocks)",
+                     ylabel="logits (scale arbitrary per run)" if pi == 0 else "")
+        ax.set_title(label, color=P.INK, fontsize=10, loc="left")
         ax.set_xscale("log", base=2)
         ax.margins(x=0.16)
         ax.set_xticks(depths)
@@ -376,7 +380,7 @@ def _cross_lines(recs, out_dir, name, title, keys):
     if not recs:
         return None
     depths = [r["meta"]["depth"] for r in recs]
-    fig, axes = plt.subplots(1, len(keys), figsize=(3.7 * len(keys), 3.6),
+    fig, axes = plt.subplots(1, len(keys), figsize=(4.6 * len(keys), 3.6),
                              facecolor=P.SURFACE, squeeze=False)
     rows = []
     for pi, (key, label) in enumerate(keys.items()):
@@ -400,9 +404,14 @@ def _cross_lines(recs, out_dir, name, title, keys):
                     + [c.get(k, {}).get("mean") for k in keys]
                     + [c.get("split_bin_fraction"), c.get("direction_split_deg")])
     fig.suptitle(title, color=P.INK, fontsize=13, x=0.012, ha="left")
-    fig.text(0.012, -0.04, "action_topology_gain is measured only on bins where the "
-             "geodesic and straight-line directions disagree by at least "
-             "direction_split_deg; split_bin_fraction says how many bins that is.",
+    _sd = recs[0]["metrics"]["_cross"].get("direction_split_deg", 45.0)
+    _sf = recs[0]["metrics"]["_cross"].get("split_bin_fraction")
+    fig.text(0.012, -0.04,
+             f"Left panel is measured only on the bins where the geodesic and "
+             f"straight-line directions disagree by at least {_sd:.0f} deg "
+             + (f"({100 * _sf:.0f}% of bins). " if _sf else ". ")
+             + "Both are differences of logits: sign and trend only, never level. "
+               "Above 0 means the critic prefers the maze-correct action.",
              color=P.MUTED, fontsize=8, ha="left", va="top")
     fig.tight_layout()
     P.save(fig, out_dir, name,
@@ -481,8 +490,8 @@ def _make_one(recs, out_dir, interpolate, suffix="") -> list:
             recs, out_dir, nm("fig6_action_tests"),
             "Does the critic prefer the maze-correct action?",
             {"action_topology_gain":
-                 "Q(geodesic act) - Q(straight act), split bins",
-             "oracle_gap": "Q(policy act) - Q(geodesic act)"}))
+                 "prefers going around:  Q(geodesic) - Q(straight)",
+             "oracle_gap": "extraction:  Q(policy) - Q(geodesic)"}))
     made.append(_metric_lines(
         recs, out_dir, nm("fig4_metrics"), "Where the field peaks, and whether it climbs",
         panels=[(["peak_geodesic"], "distance of the peak bin to goal (units)", None),
