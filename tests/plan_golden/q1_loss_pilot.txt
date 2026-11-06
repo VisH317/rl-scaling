@@ -1,0 +1,23 @@
+q1_loss_pilot   (/home/vt7993/rl-scaling-refactor/experiments/q1_loss_pilot.yaml)
+  dataset   antmaze-medium-stitch-v0  size 1,000,000
+  axes      agent=['crl']  depth=[4, 32]  profile=['ogbench', 'scaling_crl']
+  seeds     [0]
+  runs      4
+  critic    {binary_nce,infonce} / {dot,neg_l2} / lse={0.0,0.1} / ensemble={1,2} / repr_dim=64
+  actor     ddpgbc  alpha=0.1  discount=0.99  p_trajgoal=0.5/p_randomgoal=0.5
+  arch      residual  width=256  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch={1024,256}  [BASELINE]
+  train     step_cap=1,000,000  plateau>=1,000,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  WARNING  logits=neg_l2 -- every logit is <= 0, so the logged `binary_accuracy` is meaningless. Read categorical_accuracy
+  grids     2 (split so figures stay separable): q1_loss_pilot__ogbench, q1_loss_pilot__scaling_crl
+
+  run_id                                                         agent   d seed
+  q1_loss_pilot__ogbench__crl__d4__n1000000__s0__abccf230        crl     4    0
+  q1_loss_pilot__scaling_crl__crl__d4__n1000000__s0__d3e96ac1    crl     4    0
+  q1_loss_pilot__ogbench__crl__d32__n1000000__s0__d9e7c621       crl    32    0
+  q1_loss_pilot__scaling_crl__crl__d32__n1000000__s0__de190d18   crl    32    0
+
+(nothing written -- add --write to generate configs, --submit to also queue)

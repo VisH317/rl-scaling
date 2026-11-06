@@ -22,8 +22,15 @@ import shutil
 from offline import config as C
 from offline.evals import common
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-TEMPLATE = os.path.join(HERE, "RESULTS_TEMPLATE.md")
+from rl_scaling import paths
+
+#: Where the template is READ from: beside this file, i.e. the code that is running.
+_CODE_HERE = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE = os.path.join(_CODE_HERE, "RESULTS_TEMPLATE.md")
+#: Where the results document and its figures are WRITTEN. Under a submit-time code
+#: snapshot these differ, and writing beside `__file__` would bury the report in
+#: scratch. See `rl_scaling.paths.OUTPUT_REPO`.
+HERE = paths.EVALS_DOCS
 
 
 def _table(header, rows) -> str:

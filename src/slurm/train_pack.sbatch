@@ -19,17 +19,11 @@
 
 set -uo pipefail
 
-REPO=${REPO:-/home/vt7993/rl-scaling}
-PY=${PY:-/scratch/gpfs/vt7993/rl-scaling/venv/bin/python}
-EXP=${EXP:-/scratch/gpfs/vt7993/rl-scaling/experiments}
+source "$(dirname "${BASH_SOURCE[0]}")/_prelude.sh"
 : "${RUN_IDS:?RUN_IDS must be set (space-separated run ids)}"
 RUNS_PER_GPU=${RUNS_PER_GPU:-3}
 MEM_FRACTION=${MEM_FRACTION:-0.28}
 
-export MUJOCO_GL=egl
-export TQDM_DISABLE=1
-export PYTHONUNBUFFERED=1
-export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export XLA_PYTHON_CLIENT_MEM_FRACTION=$MEM_FRACTION
 
 # Hand the runs a graceful-stop deadline. Without it a Slurm timeout kills each process
@@ -44,7 +38,6 @@ if [ -n "${SLURM_JOB_ID:-}" ]; then
 fi
 
 cd "$REPO/src" || exit 1
-mkdir -p "$EXP/slurm"
 
 N_GPUS=$(nvidia-smi --list-gpus | wc -l)
 echo "job $SLURM_JOB_ID on $(hostname): $N_GPUS GPUs, ${RUNS_PER_GPU} runs/GPU"

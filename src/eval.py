@@ -18,25 +18,14 @@ The split from `src/run.py` is deliberate. `run.py` creates runs; this consumes 
 writes only into the analysis directory. Nothing here can modify a run.
 """
 
-# --- interpreter guard ------------------------------------------------------
-# Stellar's system python3 is 3.6.8; this project needs 3.9+. Must stay 3.6-parseable
-# and above every other import. See the same block in src/run.py.
+# Interpreter guard and import paths, in one line. MUST come first and stay
+# 3.6-parseable: Stellar's system python3 is 3.6.8 and importing this re-execs into
+# the project venv. See src/rl_scaling/bootstrap.py for why.
 import os
 import sys
 
-_PY = os.environ.get("RL_SCALING_PYTHON") or os.path.join(
-    os.environ.get("RL_SCALING_SCRATCH", "/scratch/gpfs/vt7993"),
-    "rl-scaling", "venv", "bin", "python")
-if sys.version_info < (3, 9):
-    if not os.path.exists(_PY):
-        sys.stderr.write(
-            "this needs Python 3.9+ (found %d.%d) and the project venv is not at\n"
-            "  %s\nSet RL_SCALING_PYTHON to your interpreter, or run it as\n"
-            "  <venv>/bin/python %s\n"
-            % (sys.version_info[0], sys.version_info[1], _PY, __file__))
-        raise SystemExit(1)
-    os.execv(_PY, [_PY, os.path.abspath(__file__)] + sys.argv[1:])
-# ----------------------------------------------------------------------------
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rl_scaling.bootstrap  # noqa: E402,F401
 
 import argparse
 import glob
@@ -243,9 +232,21 @@ def write(cfg: dict, tasks: list) -> list:
     return paths
 
 
-def submit(cfg: dict, tasks: list, paths: list) -> int:
-    repo = os.path.dirname(_HERE)
-    script = os.path.join(repo, "src", "slurm", "eval_pack.sbatch")
+def submit(cfg: dict, tasks: list, task_paths: list) -> int:
+    """Freeze the code, then submit the job out of the frozen copy.
+
+    A queued job runs `$REPO` as it is when it STARTS. Without a snapshot, editing a
+    file changes the meaning of work already in the queue, and a finished run records
+    its hyperparameters while nothing records the code that read them. The sbatch
+    prelude derives `REPO` from its own location, so submitting the snapshot's copy
+    of the script is all it takes for the job to be self-consistent.
+
+    `RL_SCALING_OUTPUT_REPO` keeps the generated results document in the live
+    checkout rather than in the snapshot on scratch.
+    """
+    from rl_scaling import paths as P
+    from rl_scaling import slurm as S
+
     cap = _fmt_hms(sum(_hms(t["resources"].get("time_limit", "01:00:00"))
                        for t in tasks))
     # The task list goes in a FILE, not in --export. sbatch splits --export on commas
@@ -253,9 +254,14 @@ def submit(cfg: dict, tasks: list, paths: list) -> int:
     # silently run fewer tasks instead of failing.
     task_file = os.path.join(suite_dir(cfg), "tasks.txt")
     with open(task_file, "w") as f:
-        f.write("\n".join(paths) + "\n")
+        f.write("\n".join(task_paths) + "\n")
+
+    snap = S.snapshot()
+    exports = ",".join(["ALL", f"TASK_FILE={task_file}",
+                        f"RL_SCALING_OUTPUT_REPO={P.OUTPUT_REPO}"])
     cmd = ["sbatch", f"--time={cap}", f"--job-name=crl-eval-{cfg['name']}",
-           f"--export=ALL,TASK_FILE={task_file}", script]
+           f"--output={S.log_option('eval')}", f"--export={exports}",
+           S.sbatch_script(snap, "eval_pack.sbatch")]
     print("  " + " ".join(cmd))
     return subprocess.call(cmd, env=os.environ.copy())
 

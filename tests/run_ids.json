@@ -1,0 +1,66 @@
+{
+  "humanoid_ensemble1": [
+    "humanoid_ensemble1__crl__d4__n1000000__s0__afee9b28",
+    "humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09",
+    "humanoid_ensemble1__crl__d8__n1000000__s0__a857e3c3",
+    "humanoid_ensemble1__crl__d8__n1000000__s1__a963cbb2",
+    "humanoid_ensemble1__crl__d16__n1000000__s0__a548fd8f",
+    "humanoid_ensemble1__crl__d16__n1000000__s1__a7dcc884",
+    "humanoid_ensemble1__crl__d32__n1000000__s0__d1da46a4",
+    "humanoid_ensemble1__crl__d32__n1000000__s1__9ca3fb59"
+  ],
+  "phase1_anchor": [
+    "phase1_anchor__crl__d4__n1000000__s0__e2b4cdd4",
+    "phase1_anchor__crl__d4__n1000000__s1__717fe2b1",
+    "phase1_anchor__crl__d4__n1000000__s2__965db516",
+    "phase1_anchor__gcbc__d4__n1000000__s0__58179f22",
+    "phase1_anchor__gcbc__d4__n1000000__s1__a1d4e5f2",
+    "phase1_anchor__gcbc__d4__n1000000__s2__483e2477"
+  ],
+  "phase1_repro": [
+    "phase1_repro__crl__d4__n1000000__s0__b83f1e8b",
+    "phase1_repro__crl__d4__n1000000__s1__acdde8ae",
+    "phase1_repro__crl__d4__n1000000__s2__9ad8e9d4",
+    "phase1_repro__crl__d8__n1000000__s0__f813301a",
+    "phase1_repro__crl__d8__n1000000__s1__a965c3a1",
+    "phase1_repro__crl__d8__n1000000__s2__43511f71",
+    "phase1_repro__crl__d16__n1000000__s0__bd08cc0c",
+    "phase1_repro__crl__d16__n1000000__s1__5ac42ece",
+    "phase1_repro__crl__d16__n1000000__s2__c674fc85",
+    "phase1_repro__crl__d32__n1000000__s0__1f847ae3",
+    "phase1_repro__crl__d32__n1000000__s1__1e7813ba",
+    "phase1_repro__crl__d32__n1000000__s2__c92f51af",
+    "phase1_repro__gcbc__d4__n1000000__s0__d05ba7dc",
+    "phase1_repro__gcbc__d4__n1000000__s1__9243b475",
+    "phase1_repro__gcbc__d4__n1000000__s2__a9f262a7",
+    "phase1_repro__gcbc__d8__n1000000__s0__9f5598c3",
+    "phase1_repro__gcbc__d8__n1000000__s1__f3d576b6",
+    "phase1_repro__gcbc__d8__n1000000__s2__bdbef769",
+    "phase1_repro__gcbc__d16__n1000000__s0__574048d8",
+    "phase1_repro__gcbc__d16__n1000000__s1__d072c81c",
+    "phase1_repro__gcbc__d16__n1000000__s2__2070db3a",
+    "phase1_repro__gcbc__d32__n1000000__s0__710b713a",
+    "phase1_repro__gcbc__d32__n1000000__s1__86a42c07",
+    "phase1_repro__gcbc__d32__n1000000__s2__d96b40e1"
+  ],
+  "q1_loss_pilot": [
+    "q1_loss_pilot__ogbench__crl__d4__n1000000__s0__abccf230",
+    "q1_loss_pilot__scaling_crl__crl__d4__n1000000__s0__d3e96ac1",
+    "q1_loss_pilot__ogbench__crl__d32__n1000000__s0__d9e7c621",
+    "q1_loss_pilot__scaling_crl__crl__d32__n1000000__s0__de190d18"
+  ],
+  "scaling_crl_replication": [
+    "scaling_crl_replication__crl__d4__n1000000__s0__1a8aee34",
+    "scaling_crl_replication__crl__d4__n1000000__s1__1c60eaa5",
+    "scaling_crl_replication__crl__d4__n1000000__s2__58407f93",
+    "scaling_crl_replication__crl__d8__n1000000__s0__85a25c85",
+    "scaling_crl_replication__crl__d8__n1000000__s1__24632317",
+    "scaling_crl_replication__crl__d8__n1000000__s2__246dcabb",
+    "scaling_crl_replication__crl__d16__n1000000__s0__cc7c501a",
+    "scaling_crl_replication__crl__d16__n1000000__s1__94ec9933",
+    "scaling_crl_replication__crl__d16__n1000000__s2__f1ae2097",
+    "scaling_crl_replication__crl__d32__n1000000__s0__5002c5f8",
+    "scaling_crl_replication__crl__d32__n1000000__s1__d12e743a",
+    "scaling_crl_replication__crl__d32__n1000000__s2__17580388"
+  ]
+}

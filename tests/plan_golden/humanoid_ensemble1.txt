@@ -1,0 +1,24 @@
+humanoid_ensemble1   (/home/vt7993/rl-scaling-refactor/experiments/humanoid_ensemble1.yaml)
+  dataset   humanoidmaze-medium-navigate-v0  size 1,000,000
+  axes      agent=['crl']  depth=[4, 8, 16, 32]
+  seeds     [0, 1]
+  runs      8
+  critic    binary_nce / dot / lse=0.0 / ensemble=1 / repr_dim=64
+  actor     ddpgbc  alpha=0.1  discount=0.995  p_trajgoal=1.0/p_randomgoal=0.0
+  arch      residual  width=256  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch=1024  [BASELINE]
+  train     step_cap=2,000,000  plateau>=1,000,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  run_id                                                         agent   d seed
+  humanoid_ensemble1__crl__d4__n1000000__s0__afee9b28            crl     4    0
+  humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09            crl     4    1
+  humanoid_ensemble1__crl__d8__n1000000__s0__a857e3c3            crl     8    0
+  humanoid_ensemble1__crl__d8__n1000000__s1__a963cbb2            crl     8    1
+  humanoid_ensemble1__crl__d16__n1000000__s0__a548fd8f           crl    16    0
+  humanoid_ensemble1__crl__d16__n1000000__s1__a7dcc884           crl    16    1
+  humanoid_ensemble1__crl__d32__n1000000__s0__d1da46a4           crl    32    0
+  humanoid_ensemble1__crl__d32__n1000000__s1__9ca3fb59           crl    32    1
+
+(nothing written -- add --write to generate configs, --submit to also queue)

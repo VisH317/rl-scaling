@@ -1,0 +1,29 @@
+phase1_repro   (/home/vt7993/rl-scaling-refactor/experiments/phase1_repro.yaml)
+  dataset   antmaze-medium-stitch-v0  size 1,000,000
+  axes      agent=['crl', 'gcbc']  depth=[4, 8, 16, 32]
+  seeds     [0, 1, 2]
+  runs      24
+  critic    binary_nce / dot / lse=0.0 / ensemble=2 / repr_dim=64
+  actor     ddpgbc  alpha=0.1  discount=0.99  p_trajgoal={0.5,1.0}/p_randomgoal={0.0,0.5}
+  arch      residual  width=256  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch=1024  [BASELINE]
+  train     step_cap=2,000,000  plateau>=1,000,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  run_id                                                         agent   d seed
+  phase1_repro__crl__d4__n1000000__s0__b83f1e8b                  crl     4    0
+  phase1_repro__crl__d4__n1000000__s1__acdde8ae                  crl     4    1
+  phase1_repro__crl__d4__n1000000__s2__9ad8e9d4                  crl     4    2
+  phase1_repro__crl__d8__n1000000__s0__f813301a                  crl     8    0
+  phase1_repro__crl__d8__n1000000__s1__a965c3a1                  crl     8    1
+  phase1_repro__crl__d8__n1000000__s2__43511f71                  crl     8    2
+  phase1_repro__crl__d16__n1000000__s0__bd08cc0c                 crl    16    0
+  phase1_repro__crl__d16__n1000000__s1__5ac42ece                 crl    16    1
+  phase1_repro__crl__d16__n1000000__s2__c674fc85                 crl    16    2
+  phase1_repro__crl__d32__n1000000__s0__1f847ae3                 crl    32    0
+  phase1_repro__crl__d32__n1000000__s1__1e7813ba                 crl    32    1
+  phase1_repro__crl__d32__n1000000__s2__c92f51af                 crl    32    2
+  ... and 12 more
+
+(nothing written -- add --write to generate configs, --submit to also queue)

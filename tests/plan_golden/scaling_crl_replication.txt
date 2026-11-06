@@ -1,0 +1,30 @@
+scaling_crl_replication   (/home/vt7993/rl-scaling-refactor/experiments/scaling_crl_replication.yaml)
+  dataset   antmaze-medium-stitch-v0  size 1,000,000
+  axes      agent=['crl']  depth=[4, 8, 16, 32]
+  seeds     [0, 1, 2]
+  runs      12
+  critic    infonce / neg_l2 / lse=0.1 / ensemble=1 / repr_dim=64
+  actor     ddpgbc  alpha=0.1  discount=0.99  p_trajgoal=0.5/p_randomgoal=0.5
+  arch      residual  width=256  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch=256  [BASELINE]
+  train     step_cap=2,000,000  plateau>=1,000,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  WARNING  logits=neg_l2 -- every logit is <= 0, so the logged `binary_accuracy` is meaningless. Read categorical_accuracy
+
+  run_id                                                         agent   d seed
+  scaling_crl_replication__crl__d4__n1000000__s0__1a8aee34       crl     4    0
+  scaling_crl_replication__crl__d4__n1000000__s1__1c60eaa5       crl     4    1
+  scaling_crl_replication__crl__d4__n1000000__s2__58407f93       crl     4    2
+  scaling_crl_replication__crl__d8__n1000000__s0__85a25c85       crl     8    0
+  scaling_crl_replication__crl__d8__n1000000__s1__24632317       crl     8    1
+  scaling_crl_replication__crl__d8__n1000000__s2__246dcabb       crl     8    2
+  scaling_crl_replication__crl__d16__n1000000__s0__cc7c501a      crl    16    0
+  scaling_crl_replication__crl__d16__n1000000__s1__94ec9933      crl    16    1
+  scaling_crl_replication__crl__d16__n1000000__s2__f1ae2097      crl    16    2
+  scaling_crl_replication__crl__d32__n1000000__s0__5002c5f8      crl    32    0
+  scaling_crl_replication__crl__d32__n1000000__s1__d12e743a      crl    32    1
+  scaling_crl_replication__crl__d32__n1000000__s2__17580388      crl    32    2
+
+(nothing written -- add --write to generate configs, --submit to also queue)
