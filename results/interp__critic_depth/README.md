@@ -1,7 +1,7 @@
 # interp01 — critic interpretability results
 
 <!-- AUTO:meta -->
-**Suite** `interp01` · **generated** 2026-11-06 15:12 · **8 checkpoints**
+**Suite** `interp01` · **generated** 2026-11-06 15:15 · **8 checkpoints**
 
 | | |
 |---|---|
@@ -116,8 +116,6 @@ shown because the between-seed spread is comparable to some depth gaps.
 ### 3.1 The value field
 
 <!-- AUTO:img_fig1_critic_field -->
-![fig1_critic_field](fig1_critic_field.png)
-
 **`humanoid_ensemble1`**
 
 ![fig1_critic_field](fig1_critic_field__humanoid_ensemble1.png)
@@ -147,8 +145,6 @@ log-ratio, so **only the shape is comparable across rows**, never the magnitude.
 ### 3.2 Does the field follow the maze?
 
 <!-- AUTO:img_fig2_topology -->
-![fig2_topology](fig2_topology.png)
-
 **`humanoid_ensemble1`**
 
 ![fig2_topology](fig2_topology__humanoid_ensemble1.png)
@@ -210,8 +206,6 @@ subtracting coordinates. Positive = the field bends around walls.
 ### 3.3 Where the field peaks, and whether it climbs
 
 <!-- AUTO:img_fig4_metrics -->
-![fig4_metrics](fig4_metrics.png)
-
 **`humanoid_ensemble1`**
 
 ![fig4_metrics](fig4_metrics__humanoid_ensemble1.png)
@@ -281,8 +275,6 @@ empty panel.
 ### 3.4 Which action does the critic prefer?
 
 <!-- AUTO:img_fig5_action_preference -->
-![fig5_action_preference](fig5_action_preference.png)
-
 **`humanoid_ensemble1`**
 
 ![fig5_action_preference](fig5_action_preference__humanoid_ensemble1.png)
@@ -297,8 +289,6 @@ directions differ by at least the split angle. Bins where they agree are drawn *
 (the question does not apply); bins with no data stay **hatched** (we do not know).
 
 <!-- AUTO:img_fig6_action_tests -->
-![fig6_action_tests](fig6_action_tests.png)
-
 **`humanoid_ensemble1`**
 
 ![fig6_action_tests](fig6_action_tests__humanoid_ensemble1.png)
@@ -436,8 +426,6 @@ Which target belongs to which site, and why `raw_obs` differs per site, is in
 from their concatenation and a goal property is computed on the goal observation.
 
 <!-- AUTO:img_fig1_probe_vs_depth -->
-![fig1_probe_vs_depth](fig1_probe_vs_depth.png)
-
 **`humanoid_ensemble1`**
 
 ![fig1_probe_vs_depth](fig1_probe_vs_depth__humanoid_ensemble1.png)
@@ -506,8 +494,6 @@ together would give the heatmap result a representational mechanism; moving apar
 the information is present and the dot product does not use it.
 
 <!-- AUTO:img_fig2_probe_vs_heatmap -->
-![fig2_probe_vs_heatmap](fig2_probe_vs_heatmap.png)
-
 **`humanoid_ensemble1`**
 
 ![fig2_probe_vs_heatmap](fig2_probe_vs_heatmap__humanoid_ensemble1.png)

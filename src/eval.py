@@ -318,7 +318,22 @@ def figures(cfg: dict) -> int:
         if spec is None or not spec.figures:
             continue
         mod = spec.figure_module()
-        made += mod.make_figures(sd, os.path.join(sd, "figures", spec.name))
+        out = os.path.join(sd, "figures", spec.name)
+        # Clear first. Figure NAMES depend on how many grids the suite spans -- a
+        # second grid turns `figX.png` into `figX__<grid>.png` -- so without this the
+        # superseded single-grid files stay on disk, get copied into results/ by
+        # --report, and sit beside the current ones looking equally current.
+        before = set(glob.glob(os.path.join(out, "fig*.png"))
+                     + glob.glob(os.path.join(out, "fig*.csv")))
+        drawn = mod.make_figures(sd, out)
+        # A figure's CSV sits beside its PNG and is not in `drawn`, so keep both.
+        kept = {os.path.basename(x) for x in drawn}
+        kept |= {os.path.splitext(os.path.basename(x))[0] + ".csv" for x in drawn}
+        for f in sorted(before):
+            if os.path.basename(f) not in kept:
+                os.remove(f)
+                print(f"  removed superseded {os.path.basename(f)}")
+        made += drawn
     for m in made:
         print(f"  {m}")
     if not made:

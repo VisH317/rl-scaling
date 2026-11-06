@@ -362,12 +362,24 @@ def build(cfg: dict, suite_dir: str) -> str:
     fig_dir = paths.results_dir(cfg["name"])
     out_md = os.path.join(fig_dir, "README.md")
 
-    copied = 0
+    copied, names = 0, set()
     for src in glob.glob(os.path.join(suite_dir, "figures", "**", "*.png"),
                          recursive=True) + glob.glob(
             os.path.join(suite_dir, "figures", "**", "*.csv"), recursive=True):
         shutil.copy2(src, os.path.join(fig_dir, os.path.basename(src)))
+        names.add(os.path.basename(src))
         copied += 1
+    # A suite that gains a second grid renames every figure `figX` -> `figX__<grid>`,
+    # and the old unsuffixed copies would otherwise sit beside the new ones looking
+    # current. Remove figure files this build did not write.
+    stale = 0
+    for f in sorted(glob.glob(os.path.join(fig_dir, "fig*.png"))
+                    + glob.glob(os.path.join(fig_dir, "fig*.csv"))):
+        if os.path.basename(f) not in names:
+            os.remove(f)
+            stale += 1
+    if stale:
+        print(f"  removed {stale} superseded figure file(s)")
 
     if not os.path.exists(out_md):
         text = open(TEMPLATE).read()
