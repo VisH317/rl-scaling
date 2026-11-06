@@ -63,8 +63,39 @@ def _load(suite_dir: str) -> list:
         if os.path.exists(m) and os.path.exists(me):
             recs.append(dict(dir=d, metrics=json.load(open(m)),
                              meta=json.load(open(me))))
-    recs.sort(key=lambda r: (r["meta"]["agent"], r["meta"]["depth"]))
+    recs.sort(key=lambda r: (r["meta"].get("grid", ""), r["meta"]["agent"],
+                             r["meta"]["depth"]))
     return recs
+
+
+def _load_probes(suite_dir: str) -> list:
+    out = []
+    for d in sorted(glob.glob(os.path.join(suite_dir, "state_probes", "*"))):
+        f = os.path.join(d, "probes.json")
+        if os.path.exists(f):
+            out.append(json.load(open(f)))
+    out.sort(key=lambda r: (r["meta"]["grid"], r["meta"]["depth"]))
+    return out
+
+
+def _per_grid(fn):
+    """Render a table PER GRID when the suite spans more than one.
+
+    Pooling antmaze and humanoidmaze rows into one depth-indexed table would read
+    as a single trend over eight points when it is two trends over four, and the two
+    go in opposite directions -- which is the whole finding.
+    """
+    def wrapped(cfg, recs, suite_dir):
+        grids = sorted({r["meta"].get("grid", "?") for r in recs})
+        if len(grids) <= 1:
+            return fn(cfg, recs, suite_dir)
+        out = []
+        for g in grids:
+            sub = [r for r in recs if r["meta"].get("grid", "?") == g]
+            out.append(f"**`{g}`** — `{sub[0]['meta'].get('dataset', '?')}`\n\n"
+                       + fn(cfg, sub, suite_dir))
+        return "\n\n".join(out)
+    return wrapped
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +113,9 @@ def _meta(cfg, recs, suite_dir) -> str:
         f"**{len(recs)} checkpoints**",
         "",
         f"| | |", "|---|---|",
-        f"| dataset | `{m['dataset']}` |",
+        f"| datasets | "
+        + ", ".join(f"`{d}`" for d in sorted({r['meta']['dataset'] for r in recs}))
+        + " |",
         f"| grids | {', '.join(cfg['grids'])} |",
         f"| states | {m['n_states_used']:,} from "
         f"`{', '.join(m['state_files'])}` ({m['state_source']}, held out) |",
@@ -236,8 +269,68 @@ def _provenance(cfg, recs, suite_dir) -> str:
     return "\n".join(lines)
 
 
+def _probes(cfg, recs, suite_dir) -> str:
+    """The headline probe table: can geodesic distance be read linearly off phi?"""
+    probes = _load_probes(suite_dir)
+    if not probes:
+        return "_(state_probes has not finished yet)_"
+    out = []
+    for g in sorted({r["meta"]["grid"] for r in probes}):
+        sub = [r for r in probes if r["meta"]["grid"] == g]
+        rows = []
+        for rec in sub:
+            R = rec["records"]
+            def pick(site, target, pred, sh=False):
+                for r in R:
+                    if (r["site"] == site and r["target"] == target
+                            and r["shuffled"] == sh and pred(r["features"])):
+                        return r["score"]
+                return None
+            prim = lambda f: (not f.startswith("random_init") and f != "raw_obs"
+                              and f.endswith("[0]"))
+            rnd = lambda f: f.startswith("random_init") and f.endswith("[0]")
+            raw = lambda f: f == "raw_obs"
+            rows.append([
+                rec["meta"]["depth"],
+                _fmt(pick("phi_state_action", "geodesic_to_task", prim), 3, sign=False),
+                _fmt(pick("phi_state_action", "geodesic_to_task", raw), 3, sign=False),
+                _fmt(pick("phi_state_action", "geodesic_to_task", rnd), 3, sign=False),
+                _fmt(pick("psi_goal", "geodesic_to_task", prim), 3, sign=False),
+                _fmt(pick("phi_state_action", "maze_cell", prim), 3, sign=False),
+                _fmt(pick("phi_state_action", "joint_vel_norm", prim), 3, sign=False),
+                _fmt(pick("phi_state_action", "geodesic_to_task", prim, True), 3),
+            ])
+        out.append(f"**`{g}`** — `{sub[0]['meta']['dataset']}`\n\n" + _table(
+            ["depth", "geo R² φ", "geo R² raw", "geo R² rand", "geo R² ψ",
+             "cell acc φ", "vel R² φ (ctrl)", "shuffled"], rows))
+    return ("\n\n".join(out) + "\n\nHeld out by TRAJECTORY. `φ` must beat BOTH "
+            "`raw` (the same probe on the raw input that tower sees) and `rand` (the "
+            "same architecture untrained) to have added anything. `shuffled` is the "
+            "leak check and must sit at or below 0.")
+
+
+_topology = _per_grid(_topology)
+_field = _per_grid(_field)
+_action = _per_grid(_action)
+_pertask = _per_grid(_pertask)
+_checkpoints = _per_grid(_checkpoints)
+
+def _img_block(found, stem) -> str:
+    if not found:
+        return f"_(no `{stem}` figure yet)_"
+    out = []
+    for f in found:
+        base = os.path.basename(f)
+        grid = base[len(stem) + 2:-4] if base.startswith(stem + "__") else ""
+        if grid:
+            out.append(f"**`{grid}`**")
+        out.append(f"![{stem}]({base})")
+    return "\n\n".join(out)
+
+
 BLOCKS = {"meta": _meta, "checkpoints": _checkpoints, "topology": _topology,
           "field": _field, "action": _action, "pertask": _pertask,
+          "probes": _probes,
           "reproduce": _reproduce, "provenance": _provenance}
 
 
@@ -265,7 +358,20 @@ def build(cfg: dict, suite_dir: str) -> str:
         print(f"  created {out_md} from the template")
     text = open(out_md).read()
 
-    for name, fn in BLOCKS.items():
+    # Figure slots. A suite that spans two grids writes `figX__<grid>.png`, so a
+    # static `![](figX.png)` in the template would be a broken link -- and a silently
+    # broken one, since markdown renders a missing image as alt text. The slots are
+    # generated from what is actually in the figure directory, and a grid that
+    # produced no figure simply does not appear.
+    blocks = dict(BLOCKS)
+    for nm in re.findall(r"<!-- AUTO:(img_fig[0-9A-Za-z_]+) -->", text):
+        stem = nm[4:]
+        found = sorted(glob.glob(os.path.join(fig_dir, f"{stem}*.png")))
+        # Both `found` AND `stem` are bound now: capturing only one leaves the other
+        # late-bound, so every slot renders the LAST loop iteration's name.
+        blocks[nm] = (lambda f, st: (lambda cfg, recs, sd: _img_block(f, st)))(found, stem)
+
+    for name, fn in blocks.items():
         pat = re.compile(r"(<!-- AUTO:%s -->)(.*?)(<!-- /AUTO:%s -->)" % (name, name),
                          re.S)
         if not pat.search(text):

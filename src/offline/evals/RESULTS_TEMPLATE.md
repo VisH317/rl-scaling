@@ -54,7 +54,8 @@ shown because the between-seed spread is comparable to some depth gaps.
 
 ### 3.1 The value field
 
-![critic value field](fig1_critic_field.png)
+<!-- AUTO:img_fig1_critic_field -->
+<!-- /AUTO:img_fig1_critic_field -->
 
 `Q(s, π(s,g), g)` per spatial bin, drawn on the environment's own top-down render.
 Walls are the white blocks; hatched bins fell below the state floor and enter no metric.
@@ -65,7 +66,8 @@ log-ratio, so **only the shape is comparable across rows**, never the magnitude.
 
 ### 3.2 Does the field follow the maze?
 
-![topology](fig2_topology.png)
+<!-- AUTO:img_fig2_topology -->
+<!-- /AUTO:img_fig2_topology -->
 
 <!-- AUTO:topology -->
 <!-- /AUTO:topology -->
@@ -79,7 +81,8 @@ subtracting coordinates. Positive = the field bends around walls.
 
 ### 3.3 Where the field peaks, and whether it climbs
 
-![metrics](fig4_metrics.png)
+<!-- AUTO:img_fig4_metrics -->
+<!-- /AUTO:img_fig4_metrics -->
 
 <!-- AUTO:field -->
 <!-- /AUTO:field -->
@@ -89,15 +92,28 @@ improvement, so a field can rank well globally and still trap it in a local basi
 
 > **Read:** _TODO._
 
+### 3.3b Where the policy's action beats the logged one
+
+`Q(policy action) − Q(dataset action)`, per bin. Needs `dataset` in `action_sources`;
+without it the figure has no data and `figures.py` skips it rather than drawing an
+empty panel.
+
+<!-- AUTO:img_fig3_advantage_field -->
+<!-- /AUTO:img_fig3_advantage_field -->
+
+> **Read:** _TODO._
+
 ### 3.4 Which action does the critic prefer?
 
-![action preference](fig5_action_preference.png)
+<!-- AUTO:img_fig5_action_preference -->
+<!-- /AUTO:img_fig5_action_preference -->
 
 `Q(maze-correct action) − Q(straight-at-goal action)`, on the bins where those two
 directions differ by at least the split angle. Bins where they agree are drawn **pale**
 (the question does not apply); bins with no data stay **hatched** (we do not know).
 
-![action tests](fig6_action_tests.png)
+<!-- AUTO:img_fig6_action_tests -->
+<!-- /AUTO:img_fig6_action_tests -->
 
 <!-- AUTO:action -->
 <!-- /AUTO:action -->
@@ -123,11 +139,34 @@ Task 4 is the one to look at: its start `(6,5)` is a dead end whose only exit po
 
 ## 4. `state_probes`
 
-**Planned, not run.** Design in [`state_probes/README.md`](state_probes/README.md): do
-`φ(s,a)` and `ψ(g)` *linearly* encode position, maze cell and geodesic distance, above a
-raw-observation and an untrained-network baseline? It and `critic_heatmap` can disagree,
-which is the interesting case — a representation can carry geodesic distance linearly
-while the dot product fails to use it.
+Do `φ(s,a)` and `ψ(g)` *linearly* encode position, maze cell and geodesic distance,
+above a raw-input and an untrained-network baseline? This and `critic_heatmap` can
+disagree, which is the interesting case — a representation can carry geodesic distance
+linearly while the dot product fails to use it.
+
+Design: [`state_probes/README.md`](../../src/offline/evals/state_probes/README.md).
+Which target belongs to which site, and why `raw_obs` differs per site, is in
+`impl.py`'s docstring: `φ` and `ψ` never see each other, so a pair property is probed
+from their concatenation and a goal property is computed on the goal observation.
+
+<!-- AUTO:img_fig1_probe_vs_depth -->
+<!-- /AUTO:img_fig1_probe_vs_depth -->
+
+<!-- AUTO:probes -->
+<!-- /AUTO:probes -->
+
+> **Read:** _TODO._
+
+### 4.1 Does the representation explain the value field?
+
+`geodesic_to_task` probe R² against the same checkpoint's `rho_geodesic`. Moving
+together would give the heatmap result a representational mechanism; moving apart says
+the information is present and the dot product does not use it.
+
+<!-- AUTO:img_fig2_probe_vs_heatmap -->
+<!-- /AUTO:img_fig2_probe_vs_heatmap -->
+
+> **Read:** _TODO._
 
 ---
 
@@ -146,9 +185,15 @@ while the dot product fails to use it.
 2. **`Q` scale is arbitrary per run.** `topology_gain` is a difference of rank
    correlations and is safe to compare; `action_topology_gain` and `oracle_gap` are in
    **logits** and are comparable in sign and trend only.
-3. **One environment.** `antmaze-medium-stitch-v0` only. The 1000-layer paper's own
-   offline result (its Figure 14, GCBC) is on this same dataset, so a positive here is
-   adjacent to a known positive, not against it.
+3. **Two environments, not a controlled contrast.** `antmaze-medium-stitch-v0` and
+   `humanoidmaze-medium-navigate-v0`. The grids behind them differ in dataset,
+   `critic_ensemble` **and** `discount`, so a difference between them is not
+   attributable to the environment. The 1000-layer paper's own offline result (its
+   Figure 14, GCBC) is on antmaze-medium-stitch, so a positive there is adjacent to a
+   known positive, not against it.
+5. **Figures are one set per grid.** `Q` is an unnormalised log-density ratio whose
+   scale is arbitrary per run, so no panel pools the two environments and no colour
+   scale is shared across them.
 4. **Not a causal test.** A critic can rank bins correctly and still extract a bad
    policy. `oracle_gap` is the closest thing here to separating the two.
 
