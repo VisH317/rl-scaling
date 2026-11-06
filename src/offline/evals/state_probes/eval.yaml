@@ -1,12 +1,13 @@
-# Linear probes on the critic's representations. PLANNED -- see README.md.
-# `src/eval.py` resolves this eval and prints it in the plan, but refuses to submit
-# it, naming this file. Nothing here has been run.
+# Linear probes on the critic's representations. See README.md for the design and
+# impl.py's docstring for which target belongs to which site -- phi and psi cannot
+# see each other, so a pair property is probed from their concatenation and a goal
+# property is computed on the goal observation.
 name: state_probes
 title: What the critic's representations linearly encode about the state
-status: planned
+status: ready
 doc: README.md
 module: impl
-figures: null
+figures: figures
 
 applies_to: [crl]
 requires: [critic]
@@ -15,7 +16,12 @@ env_family: [locomaze]
 params:
   state_source: val
   # --- what is probed -------------------------------------------------------
-  sites: [psi_goal, phi_state_action]   # +block_k once activation capture exists
+  sites: [psi_goal, phi_state_action, phi_psi_concat]  # +block_k once activation
+                                                       #  capture exists
+  # Subsampling INSIDE each kept trajectory. Neighbouring rows are 0.05 s apart and
+  # near-duplicates, so every 20th costs almost nothing and keeps the solves small.
+  state_stride: 20
+  max_states: 20000
   # --- what it is probed FOR ------------------------------------------------
   targets:
     - xy                 # regression. Dims 0:2 of the observation -- a LEAK CHECK,
@@ -27,6 +33,9 @@ params:
     - joint_vel_norm     # regression. Control: should NOT improve with depth.
   # --- method ---------------------------------------------------------------
   split: trajectory      # NEVER `state`: neighbouring states are near-duplicates
+  # A CAP, not a demand: the humanoid val shard has 100 trajectories against this
+  # request for 500, so the split falls back to the same ratio of whatever exists and
+  # records the counts actually used.
   n_train_trajs: 400
   n_test_trajs: 100
   ridge_lambdas: [1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 10.0, 100.0]

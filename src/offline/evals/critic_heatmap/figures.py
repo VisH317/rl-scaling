@@ -413,25 +413,51 @@ def _cross_lines(recs, out_dir, name, title, keys):
 
 
 def make_figures(suite_dir: str, out_dir: str = None, interpolate: bool = False) -> list:
+    """Figures for every grid in the suite, one complete set EACH.
+
+    Never one set across grids. `Q` is an unnormalised log-density ratio whose scale is
+    arbitrary per run, the datasets differ, and the depth trend is the thing being read
+    -- so putting antmaze and humanoidmaze panels in one grid of axes would invite
+    exactly the comparison the per-panel normalisation exists to prevent. With more
+    than one grid present, each set is suffixed `__<grid>`.
+    """
     out_dir = out_dir or os.path.join(suite_dir, "figures")
-    recs = [_attach_geometry(r) for r in load(suite_dir)]
-    if not recs:
+    allrecs = [_attach_geometry(r) for r in load(suite_dir)]
+    if not allrecs:
         print(f"  no critic_heatmap results under {suite_dir}")
         return []
+    grids = sorted({r["meta"].get("grid", "?") for r in allrecs})
+    made = []
+    for g in grids:
+        sub = [r for r in allrecs if r["meta"].get("grid", "?") == g]
+        made += _make_one(sub, out_dir, interpolate,
+                          suffix=f"__{g}" if len(grids) > 1 else "")
+    return made
+
+
+def _make_one(recs, out_dir, interpolate, suffix="") -> list:
+    def nm(base):
+        return base + suffix
+
+    ds = recs[0]["meta"].get("dataset", "?")
+    head = f"  [{ds}]" if suffix else ""
+    if head:
+        print(head)
     made = []
     made.append(_field_figure(
-        recs, out_dir, key="q_policy", name="fig1_critic_field", cmap=CMAP_Q,
+        recs, out_dir, key="q_policy", name=nm("fig1_critic_field"), cmap=CMAP_Q,
         diverging=False, interpolate=interpolate,
-        title="Critic value field under the policy's own action, by depth and task",
+        title=("Critic value field under the policy's own action, by depth and task"
+               + (f"  [{ds}]" if suffix else "")),
         sublabel=lambda m, r, i: (f"rho {m['rho_geodesic']:+.2f}  "
                                   f"gain {m['topology_gain']:+.2f}")))
     made.append(_metric_lines(
-        recs, out_dir, "fig2_topology", "Does the value field follow the maze?",
+        recs, out_dir, nm("fig2_topology"), "Does the value field follow the maze?",
         panels=[(["rho_geodesic", "rho_euclid"], "Spearman rho vs -distance", (-1, 1)),
                 (["topology_gain"], "topology_gain = rho_geo - rho_euclid", None)]))
     if any("advantage" in r["z"] for r in recs):
         made.append(_field_figure(
-            recs, out_dir, key="advantage", name="fig3_advantage_field", cmap=CMAP_ADV,
+            recs, out_dir, key="advantage", name=nm("fig3_advantage_field"), cmap=CMAP_ADV,
             diverging=True, interpolate=interpolate,
             title="Q(policy action) - Q(dataset action), by depth and task",
             sublabel=lambda m, r, i: f"mean {m['q_mean']:+.3f}"))
@@ -444,7 +470,7 @@ def make_figures(suite_dir: str, out_dir: str = None, interpolate: bool = False)
 
         made.append(_field_figure(
             recs, out_dir, key="oracle_geo_minus_euclid",
-            name="fig5_action_preference", cmap=CMAP_ADV, diverging=True,
+            name=nm("fig5_action_preference"), cmap=CMAP_ADV, diverging=True,
             interpolate=interpolate, mask_fn=_disagree,
             title=f"Q(maze-correct action) - Q(straight-at-goal action), on the bins "
                   f"where those differ by >= {split:.0f} deg",
@@ -452,13 +478,13 @@ def make_figures(suite_dir: str, out_dir: str = None, interpolate: bool = False)
                 r["metrics"]["_cross"]["action_topology_gain"]["per_task"][i],
                 r["metrics"]["_cross"]["action_topology_gain"]["n_bins"][i])))
         made.append(_cross_lines(
-            recs, out_dir, "fig6_action_tests",
+            recs, out_dir, nm("fig6_action_tests"),
             "Does the critic prefer the maze-correct action?",
             {"action_topology_gain":
                  "Q(geodesic act) - Q(straight act), split bins",
              "oracle_gap": "Q(policy act) - Q(geodesic act)"}))
     made.append(_metric_lines(
-        recs, out_dir, "fig4_metrics", "Where the field peaks, and whether it climbs",
+        recs, out_dir, nm("fig4_metrics"), "Where the field peaks, and whether it climbs",
         panels=[(["peak_geodesic"], "distance of the peak bin to goal (units)", None),
                 (["path_monotone"], "fraction of path steps where Q rises", (0, 1)),
                 (["goal_percentile"], "percentile rank of the goal bin", (0, 1))]))

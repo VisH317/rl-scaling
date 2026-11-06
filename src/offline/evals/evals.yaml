@@ -13,7 +13,11 @@
 name: interp01
 
 # --- which checkpoints the suite runs on -----------------------------------
-grids: [phase1_repro]            # grid names, as in experiments/*.yaml
+# Both locomaze grids. They share the same 8x8 maze and the same five (start, goal)
+# cell pairs, so every spatial metric is defined identically in both -- but the bodies,
+# the datasets and `critic_ensemble` differ, so figures are drawn one COMPLETE SET PER
+# GRID and never pooled into shared panels.
+grids: [phase1_repro, humanoid_ensemble1]
 agents: [crl]                    # an eval that does not apply to an agent is dropped
 depths: [4, 8, 16, 32]
 
@@ -43,4 +47,6 @@ evals:
       direction_split_deg: 45.0
 
   - name: state_probes
-    enabled: false               # status: planned -- see its README.md
+    params:
+      state_stride: 20
+      max_states: 20000
