@@ -1,8 +1,8 @@
 antmaze_navigate1   (<repo>/experiments/antmaze_navigate1.yaml)
   dataset   antmaze-medium-navigate-v0  size 1,000,000
-  axes      agent=['crl']  depth=[4, 32]
+  axes      agent=['crl']  depth=[4, 8, 16, 32]
   seeds     [0, 1, 2]
-  runs      6
+  runs      12
   critic    binary_nce / dot / lse=0.0 / ensemble=2 / repr_dim=64
   actor     ddpgbc  alpha=0.1  discount=0.99  p_trajgoal=0.5/p_randomgoal=0.5
   arch      residual  width=256  block=4  init=lecun_uniform
@@ -15,6 +15,12 @@ antmaze_navigate1   (<repo>/experiments/antmaze_navigate1.yaml)
   antmaze_navigate1__crl__d4__n1000000__s0__5f93c574             crl     4    0
   antmaze_navigate1__crl__d4__n1000000__s1__d30ca563             crl     4    1
   antmaze_navigate1__crl__d4__n1000000__s2__c507c4a7             crl     4    2
+  antmaze_navigate1__crl__d8__n1000000__s0__6a15636a             crl     8    0
+  antmaze_navigate1__crl__d8__n1000000__s1__d987acd1             crl     8    1
+  antmaze_navigate1__crl__d8__n1000000__s2__72c7f196             crl     8    2
+  antmaze_navigate1__crl__d16__n1000000__s0__7080459e            crl    16    0
+  antmaze_navigate1__crl__d16__n1000000__s1__0c914f6a            crl    16    1
+  antmaze_navigate1__crl__d16__n1000000__s2__2563aec7            crl    16    2
   antmaze_navigate1__crl__d32__n1000000__s0__a5906993            crl    32    0
   antmaze_navigate1__crl__d32__n1000000__s1__f6a2781a            crl    32    1
   antmaze_navigate1__crl__d32__n1000000__s2__036ea8f3            crl    32    2
