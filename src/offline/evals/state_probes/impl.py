@@ -9,7 +9,8 @@ alone, and a target that is a property of the GOAL must be computed on the goal
 observation rather than the state. The README's single target list silently assumed
 otherwise. The mapping used here, recorded in `probes.json` as `site_targets`:
 
-    phi_state_action   xy, maze_cell, geodesic_to_task, torso_z, joint_vel_norm
+    phi_state_action   xy, maze_cell, geodesic_to_task, body_height,
+                       joint_vel_norm
                        -- all functions of s alone
     psi_goal           xy, maze_cell, geodesic_to_task
                        -- the same three, computed ON THE GOAL observation
@@ -41,18 +42,19 @@ from offline.evals import common
 
 #: Targets that are functions of a single observation, and so can be computed for a
 #: state or for a goal by passing the right array.
-_OBS_TARGETS = ("xy", "maze_cell", "geodesic_to_task", "torso_z", "joint_vel_norm")
+_OBS_TARGETS = ("xy", "maze_cell", "geodesic_to_task", "body_height",
+                "joint_vel_norm")
 
 SITE_TARGETS = {
     "phi_state_action": ("xy", "maze_cell", "geodesic_to_task",
-                         "torso_z", "joint_vel_norm"),
+                         "body_height", "joint_vel_norm"),
     "psi_goal": ("xy", "maze_cell", "geodesic_to_task"),
     "phi_psi_concat": ("steps_to_goal",),
 }
 
 _KIND = {"xy": "regression", "maze_cell": "classification",
          "geodesic_to_task": "regression", "steps_to_goal": "regression",
-         "torso_z": "regression", "joint_vel_norm": "regression"}
+         "body_height": "regression", "joint_vel_norm": "regression"}
 
 
 # ---------------------------------------------------------------------------
@@ -94,16 +96,45 @@ def sample_goals(idx, tid, bounds, discount, rng):
 # Targets
 # ---------------------------------------------------------------------------
 
+#: Where the body-height scalar lives, per body, and how wide the observation should
+#: be. Read off `ogbench/locomaze/{ant,humanoid}.py::get_ob`, not assumed:
+#:
+#:   ant       concatenate([qpos, qvel])                       -> nq + nv
+#:             qpos[2] is the torso z, so height is index 2.
+#:   humanoid  concatenate([xy, qpos[7:], head_height,
+#:                          extremities(12), torso_vertical(3),
+#:                          com_velocity(3), qvel])            -> 2+(nq-7)+19+nv
+#:             The root z is NOT in the observation at all; the nearest height
+#:             scalar is `head_height`, at 2 + (nq - 7). Index 2 here is a JOINT
+#:             ANGLE -- probing it as "torso height" is what the width assertion
+#:             caught, and it would have been a plausible-looking wrong number.
+#:
+#: Velocities are the trailing `nv` in BOTH, which is why the velocity control needs
+#: no special case.
+def _layout(body: str, nq: int, nv: int) -> dict:
+    if body == "ant":
+        return dict(width=nq + nv, height=2, height_is="qpos[2], torso z")
+    if body == "humanoid":
+        return dict(width=2 + (nq - 7) + 19 + nv, height=2 + (nq - 7),
+                    height_is="head_height (the root z is not in the observation)")
+    raise ValueError(f"no observation layout recorded for body {body!r}; read its "
+                     f"get_ob() in ogbench/locomaze/ and add one")
+
+
 class TargetBuilder:
-    def __init__(self, env, geo, ob_dim):
+    def __init__(self, env, geo, ob_dim, dataset):
         self.geo = geo
         m = env.unwrapped.model
         self.nq, self.nv = int(m.nq), int(m.nv)
-        if self.nq + self.nv != ob_dim:
+        self.body = common.expert_name(dataset)
+        lay = _layout(self.body, self.nq, self.nv)
+        self.height_idx = lay["height"]
+        self.height_is = lay["height_is"]
+        if lay["width"] != ob_dim:
             raise ValueError(
-                f"observation is {ob_dim}-d but the model has nq={self.nq}, "
-                f"nv={self.nv} (expected nq+nv for a locomaze [x, y, qpos[2:], qvel] "
-                f"observation). Refusing to guess where the velocities start.")
+                f"observation is {ob_dim}-d but the {self.body} layout predicts "
+                f"{lay['width']} (nq={self.nq}, nv={self.nv}). Refusing to guess "
+                f"where the velocities start.")
         # Free cells, in a fixed order, so class ids are stable across depths.
         free = np.argwhere(geo.maze == 0)
         self.cell_index = {(int(i), int(j)): k for k, (i, j) in enumerate(free)}
@@ -129,10 +160,11 @@ class TargetBuilder:
         """`(y, kind)` for one obs-shaped target."""
         if name == "xy":
             return obs[:, :2].astype(np.float64), "regression"
-        if name == "torso_z":
-            return obs[:, 2:3].astype(np.float64), "regression"
+        if name in ("body_height", "torso_z"):
+            i = self.height_idx
+            return obs[:, i:i + 1].astype(np.float64), "regression"
         if name == "joint_vel_norm":
-            v = obs[:, self.nq:]
+            v = obs[:, -self.nv:]
             return np.linalg.norm(v, axis=1, keepdims=True).astype(np.float64), "regression"
         ij = self.cell_of(obs[:, :2])
         if name == "maze_cell":
@@ -358,7 +390,7 @@ def run(task: dict) -> dict:
     groups = tid[keep]
     steps_to_goal = (gidx - keep).astype(np.float64)[:, None]
 
-    tb = TargetBuilder(env, geo, obs.shape[1])
+    tb = TargetBuilder(env, geo, obs.shape[1], run_cfg["dataset"])
     print(f"  {len(keep)} states from {n_traj} trajectories "
           f"({want_tr} train / {want_te} test), stride {stride}, discount {discount}")
 
@@ -444,7 +476,8 @@ def run(task: dict) -> dict:
         state_source=p.get("state_source", "val"), discount=discount,
         n_states=int(len(keep)), n_traj=int(n_traj), n_train_trajs=int(want_tr),
         n_test_trajs=int(want_te), state_stride=stride,
-        n_cells=int(tb.n_cells), nq=tb.nq, nv=tb.nv,
+        n_cells=int(tb.n_cells), nq=tb.nq, nv=tb.nv, body=tb.body,
+        height_index=int(tb.height_idx), height_is=tb.height_is,
         site_targets={k: list(v) for k, v in SITE_TARGETS.items()},
         secs=round(time.time() - t0, 1))
     json.dump(dict(meta=meta, records=records),

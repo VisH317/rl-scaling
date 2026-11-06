@@ -66,7 +66,7 @@ def _random(f):
 
 
 SITE_OF = {"xy": "phi_state_action", "maze_cell": "phi_state_action",
-           "geodesic_to_task": "phi_state_action", "torso_z": "phi_state_action",
+           "geodesic_to_task": "phi_state_action", "body_height": "phi_state_action",
            "joint_vel_norm": "phi_state_action", "steps_to_goal": "phi_psi_concat"}
 
 #: Short enough not to collide at three panels per row. The longer gloss belongs in
@@ -76,7 +76,7 @@ TITLES = {
     "xy": "(x, y)  -- leak check",
     "maze_cell": "maze cell  (accuracy)",
     "steps_to_goal": "steps to sampled goal",
-    "torso_z": "torso height  (control)",
+    "body_height": "body height  (control)",
     "joint_vel_norm": "joint velocity norm  (control)",
 }
 

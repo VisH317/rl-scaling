@@ -1,0 +1,56 @@
+# Is the humanoid reversal about the BODY, or about the DATA?
+#
+# `humanoid_ensemble1` found depth hurting where `phase1_repro` found it helping. The
+# hypothesis this file tests: it is not the humanoid at all, it is `-navigate` data.
+# The three datasets, measured from their own npz files:
+#
+#     antmaze-medium-stitch-v0           5000 trajectories x  201 steps   ob 29
+#     antmaze-medium-navigate-v0         1000 trajectories x 1001 steps   ob 29   <- here
+#     humanoidmaze-medium-navigate-v0    1000 trajectories x 2001 steps   ob 69
+#
+# antmaze-navigate has humanoid's trajectory COUNT and nearly its LENGTH, with the
+# ant's 29-d observation. If depth stops paying here, the reversal is about few long
+# trajectories -- 5x fewer things to memorise, each 5x longer -- and not about the
+# humanoid. That matches what the critic metrics already say: on humanoid, held-out
+# retrieval FALLS with depth (0.150 -> 0.094) while training retrieval triples, which
+# is the signature of learning trajectory identity instead of a transferable value.
+#
+# ONE KNOB. Identical to `phase1_repro` except `dataset`. That needs an explicit
+# override, because `use_published_flags` would otherwise move a second thing:
+# OGBench publishes actor_p_trajgoal/randomgoal = 1.0/0.0 for navigate against 0.5/0.5
+# for stitch. Those are pinned to stitch's values below. The pin is the whole point --
+# p_randomgoal = 0 means the actor is NEVER trained on out-of-trajectory goals, which
+# is precisely the stitching capability, so leaving it free would confound "long
+# trajectories" with "no random goals".
+#
+# (Everything else published for this dataset still applies: alpha 0.1, discount 0.99.
+# Confirmed that navigate does NOT set discount, unlike humanoidmaze which sets 0.995.)
+#
+# READ IT AS:
+#   depth still scales (d32 >> d4)  -> the data structure is NOT the cause; look at
+#                                      the body, the discount, or critic_ensemble
+#                                      (`antmaze_ensemble1` covers the last).
+#   the gain collapses              -> the reversal is about -navigate data, the
+#                                      humanoid body is incidental, and the real
+#                                      finding is that depth overfits few long
+#                                      trajectories.
+#
+# Reference to beat, phase1_repro CRL at reeval@50: d4 35.5 +/- 9.4, d32 86.7 +/- 2.9.
+#
+#   python src/scripts/estimate_runtime.py experiments/antmaze_navigate1.yaml --verbose
+#   python src/run.py experiments/antmaze_navigate1.yaml --submit
+name: antmaze_navigate1
+dataset: antmaze-medium-navigate-v0     # <- the one deliberate change
+seeds: [0, 1, 2]
+agent: [crl]
+depth: [4, 32]
+profile: ogbench               # binary_nce + dot + no penalty
+repr_dim: 64
+tower: residual
+width: 256
+step_cap: 2000000
+
+# Pinned to phase1_repro's values so the dataset is the only difference. Do not
+# delete: without these, use_published_flags sets 1.0/0.0 for this dataset.
+actor_p_trajgoal: 0.5
+actor_p_randomgoal: 0.5

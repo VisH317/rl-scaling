@@ -29,7 +29,9 @@ params:
     - maze_cell          # 26-way classification. Chance = largest-class frequency.
     - geodesic_to_task   # regression, one column per task goal. The headline.
     - steps_to_goal      # regression. Remaining steps to the trajectory's own end.
-    - torso_z            # regression. Control: a non-spatial body coordinate.
+    - body_height        # regression. Control: a non-spatial body coordinate.
+                         #   ant = qpos[2] (torso z); humanoid = head_height,
+                         #   since the humanoid observation omits the root z.
     - joint_vel_norm     # regression. Control: should NOT improve with depth.
   # --- method ---------------------------------------------------------------
   split: trajectory      # NEVER `state`: neighbouring states are near-duplicates
