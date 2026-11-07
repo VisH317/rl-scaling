@@ -1,0 +1,28 @@
+extract_antmaze_stitch   (<repo>/experiments/extract_antmaze_stitch.yaml)
+  dataset   antmaze-medium-stitch-v0  size 1,000,000
+  axes      agent=['crl']  depth=[4, 8, 16, 32]
+  seeds     [0, 1, 2]
+  runs      12
+  critic    binary_nce / dot / lse=0.0 / ensemble=2 / repr_dim=64
+  actor     ddpgbc  alpha=0.1  discount=0.99  p_trajgoal=0.5/p_randomgoal=0.5
+  arch      residual  width=256  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch=1024  [BASELINE]
+  train     step_cap=1,000,000  plateau>=200,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  run_id                                                         agent   d seed
+  extract_antmaze_stitch__crl__d4__n1000000__s0__39ba039c        crl     4    0
+  extract_antmaze_stitch__crl__d4__n1000000__s1__19e8014a        crl     4    1
+  extract_antmaze_stitch__crl__d4__n1000000__s2__40ebcf38        crl     4    2
+  extract_antmaze_stitch__crl__d8__n1000000__s0__c7b877b4        crl     8    0
+  extract_antmaze_stitch__crl__d8__n1000000__s1__766261d0        crl     8    1
+  extract_antmaze_stitch__crl__d8__n1000000__s2__633bed36        crl     8    2
+  extract_antmaze_stitch__crl__d16__n1000000__s0__b447e88a       crl    16    0
+  extract_antmaze_stitch__crl__d16__n1000000__s1__68536721       crl    16    1
+  extract_antmaze_stitch__crl__d16__n1000000__s2__09469222       crl    16    2
+  extract_antmaze_stitch__crl__d32__n1000000__s0__b1eff35b       crl    32    0
+  extract_antmaze_stitch__crl__d32__n1000000__s1__3f5ad33d       crl    32    1
+  extract_antmaze_stitch__crl__d32__n1000000__s2__4a96fe22       crl    32    2
+
+(nothing written -- add --write to generate configs, --submit to also queue)

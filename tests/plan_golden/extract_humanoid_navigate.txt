@@ -1,0 +1,24 @@
+extract_humanoid_navigate   (<repo>/experiments/extract_humanoid_navigate.yaml)
+  dataset   humanoidmaze-medium-navigate-v0  size 1,000,000
+  axes      agent=['crl']  depth=[4, 8, 16, 32]
+  seeds     [0, 1]
+  runs      8
+  critic    binary_nce / dot / lse=0.0 / ensemble=1 / repr_dim=64
+  actor     ddpgbc  alpha=0.1  discount=0.995  p_trajgoal=1.0/p_randomgoal=0.0
+  arch      residual  width=256  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch=1024  [BASELINE]
+  train     step_cap=1,000,000  plateau>=200,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  run_id                                                         agent   d seed
+  extract_humanoid_navigate__crl__d4__n1000000__s0__924c5f8c     crl     4    0
+  extract_humanoid_navigate__crl__d4__n1000000__s1__4d0b550a     crl     4    1
+  extract_humanoid_navigate__crl__d8__n1000000__s0__aa8546ab     crl     8    0
+  extract_humanoid_navigate__crl__d8__n1000000__s1__74f80dc9     crl     8    1
+  extract_humanoid_navigate__crl__d16__n1000000__s0__2d61d106    crl    16    0
+  extract_humanoid_navigate__crl__d16__n1000000__s1__87746ffa    crl    16    1
+  extract_humanoid_navigate__crl__d32__n1000000__s0__c84b68f6    crl    32    0
+  extract_humanoid_navigate__crl__d32__n1000000__s1__97c23b7f    crl    32    1
+
+(nothing written -- add --write to generate configs, --submit to also queue)

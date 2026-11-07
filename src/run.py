@@ -104,6 +104,12 @@ DEFAULTS: dict = dict(
     plateau_window=3, plateau_min_delta=0.01,
     eval_interval=100_000, eval_episodes=15,
     gpus_per_job=2, runs_per_gpu=3, time_limit="24:00:00",
+    #: Two-stage extraction (see src/offline/extract.py). `extract_from` names the
+    #: grid whose trained critics to freeze; each run pairs with the source run at the
+    #: SAME agent/depth/seed. `actor_depth` pins the policy trunk while `depth` keeps
+    #: selecting the critic. Either may be used alone: actor_depth on its own simply
+    #: trains a mismatched pair from scratch.
+    extract_from=None, extract_checkpoint="best", actor_depth=None,
 )
 
 #: Deviating from any of these confounds the depth axis.
@@ -150,6 +156,15 @@ def load(path: str) -> dict:
             sys.exit(f"'{k}' is not a sweepable axis; give it a single value")
     if cfg["dataset"] not in C.DATASETS:
         sys.exit(f"unknown dataset {cfg['dataset']!r}; known: {sorted(C.DATASETS)}")
+    if cfg["extract_from"] is not None:
+        agents = cfg["agent"] if isinstance(cfg["agent"], list) else [cfg["agent"]]
+        if set(agents) - {"crl"}:
+            sys.exit(f"extract_from is CRL-only: gcbc has no critic to freeze "
+                     f"(got agent={agents})")
+        if cfg["actor_depth"] is None:
+            sys.exit("extract_from without actor_depth re-extracts at the critic's own "
+                     "depth, which reproduces the joint run and tests nothing; set "
+                     "actor_depth explicitly (use the critic depth if that is intended)")
 
     bad = []
     for k, (supported, why) in UNIMPLEMENTED.items():
@@ -252,6 +267,9 @@ def _one(p: dict, seed: int, swept: list[str] = ()) -> dict:
         init=merged.get("init", p["init"]), tower=p["tower"],
         ogbench_hidden_dims=[512, 512, 512],
     )
+    # Absent unless set, so no existing run id moves -- see ArchConfig.actor_depth.
+    if p["actor_depth"] is not None:
+        arch["actor_depth"] = int(p["actor_depth"])
     cfg = dict(
         grid=_grid_name(p, list(swept)), dataset=p["dataset"], env_name=ds.env_name,
         subset_id=C._subset_id(p["dataset"], p["data_size"]), size=size, seed=int(seed),
@@ -279,6 +297,16 @@ def _one(p: dict, seed: int, swept: list[str] = ()) -> dict:
         optim_deviations=[k for k, v in OPTIM_BASELINE.items()
                           if p[k] != v and k not in UNIMPLEMENTED],
     )
+    if p["extract_from"] is not None:
+        # The SOURCE RUN IS NOT NAMED HERE, deliberately. Storing a concrete run id
+        # would mean this config could only be written after the source grid had
+        # finished, and would break if the source were ever re-run. We store the grid
+        # plus the checkpoint, and `train.py` resolves it by (agent, depth, seed) --
+        # the triple already in this config -- erroring unless exactly one run matches.
+        cfg["extract"] = dict(source_grid=str(p["extract_from"]),
+                              checkpoint=str(p["extract_checkpoint"]),
+                              actor_depth=int(p["actor_depth"])
+                              if p["actor_depth"] is not None else None)
     # The id is a hash of the config, so provenance must be attached AFTER it is
     # computed -- otherwise renaming the YAML would rename every run and orphan
     # finished work. Verified: with this ordering, phase1_repro.yaml and

@@ -1,0 +1,35 @@
+# Actor extraction on the ceiling grid.
+#
+# See `extract_antmaze_stitch.yaml` for the method and why reordering is legitimate.
+#
+# Lowest value of the four, recorded for completeness: `antmaze_navigate1` is solved at
+# depth 4 (99.6 best_success), so there is no headroom for a shallow policy to show a
+# gain. Its only real use is as a NEGATIVE control -- if extraction at actor_depth 4
+# fails to hold ~99 here, the extraction procedure itself is losing something, and
+# every positive reading on the other three grids is suspect.
+#
+# Only d4 and d8 exist: pack 2 was cancelled (see results/antmaze_navigate__depth).
+# `extract.find_source_run` fails loudly on a missing source, so d16/d32 are simply
+# absent from the ladder rather than silently skipped.
+#
+# The goal split is PINNED, matching the source grid: use_published_flags would set
+# 1.0/0.0 for this dataset and the source ran 0.5/0.5.
+#
+#   python src/run.py experiments/extract_antmaze_navigate.yaml --submit
+name: extract_antmaze_navigate
+extract_from: antmaze_navigate1
+extract_checkpoint: best
+actor_depth: 4
+dataset: antmaze-medium-navigate-v0
+agent: [crl]
+depth: [4, 8]                  # all that exists; see above
+seeds: [0, 1, 2]
+profile: ogbench
+critic_ensemble: 2             # must match the source critic's shape
+repr_dim: 64
+tower: residual
+width: 256
+actor_p_trajgoal: 0.5          # pinned to the source grid's values; without these,
+actor_p_randomgoal: 0.5        # use_published_flags sets 1.0/0.0 for this dataset
+step_cap: 1000000
+plateau_min_steps: 200000

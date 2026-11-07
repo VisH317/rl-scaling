@@ -1,0 +1,32 @@
+# Actor extraction on the humanoid-stitch cell.
+#
+# See `extract_antmaze_stitch.yaml` for the method and why reordering is legitimate.
+#
+# BLOCKED until `humanoid_stitch1` finishes (jobs 2995683 / 2995684, ~12 h from
+# 2026-11-06 21:30). `extract.find_source_run` raises if the source run directory is
+# not there, so submitting early fails fast rather than training against nothing.
+#
+# Worth running whichever way that grid lands. If depth HELPS on humanoidmaze-stitch,
+# this says whether the gain is the critic's, exactly as on antmaze-stitch. If depth
+# HURTS there too, it joins `extract_humanoid_navigate` in asking whether the deep
+# policy or the deep critic is what breaks on the humanoid body.
+#
+# critic_ensemble 1 to match `humanoid_stitch1`. Published flags for this dataset give
+# alpha 0.1, discount 0.995 and goal split 0.5/0.5, same as the source.
+#
+#   python src/run.py experiments/extract_humanoid_stitch.yaml --submit
+name: extract_humanoid_stitch
+extract_from: humanoid_stitch1
+extract_checkpoint: best
+actor_depth: 4
+dataset: humanoidmaze-medium-stitch-v0
+agent: [crl]
+depth: [4, 8, 16, 32]
+seeds: [0, 1]
+profile: ogbench
+critic_ensemble: 1             # must match the source critic's shape
+repr_dim: 64
+tower: residual
+width: 256
+step_cap: 1000000
+plateau_min_steps: 200000

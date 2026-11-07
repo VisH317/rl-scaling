@@ -57,7 +57,14 @@ class ResidualMLPShim(nn.Module):
                 "must happen inside that context."
             )
         # activate_final=True is the actor trunk: no head, GCActor adds its own.
-        out_dim = None if self.activate_final else int(self.hidden_dims[-1])
+        # It is also the ONLY signal distinguishing the two call sites, since
+        # GCBilinearValue and GCActor both just call MLP(...). `arch["actor_depth"]`
+        # rides on that: when set, the policy trunk is built at a fixed depth while
+        # the critic towers still follow `arch["depth"]`.
+        is_actor_trunk = self.activate_final
+        out_dim = None if is_actor_trunk else int(self.hidden_dims[-1])
+        if is_actor_trunk and arch.get("actor_depth") is not None:
+            arch = {**arch, "depth": int(arch["actor_depth"])}
         tower = make_tower(arch, out_dim=out_dim)
         return tower(x)
 

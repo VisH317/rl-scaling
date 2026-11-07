@@ -1,9 +1,6 @@
-# The vendored OGBench clone. `lib/**` alone ignores the directory's CONTENTS but
-# not a path AT `lib`, so a symlink there is trackable -- and a merge that carries
-# one replaces the real directory with it. Ignore both forms.
-lib
-lib/
 lib/**
 src/offline/.venv
 __pycache__/
 *.pyc
+src/offline/figures
+results/*

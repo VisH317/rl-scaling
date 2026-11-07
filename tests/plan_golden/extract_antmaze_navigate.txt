@@ -1,0 +1,22 @@
+extract_antmaze_navigate   (<repo>/experiments/extract_antmaze_navigate.yaml)
+  dataset   antmaze-medium-navigate-v0  size 1,000,000
+  axes      agent=['crl']  depth=[4, 8]
+  seeds     [0, 1, 2]
+  runs      6
+  critic    binary_nce / dot / lse=0.0 / ensemble=2 / repr_dim=64
+  actor     ddpgbc  alpha=0.1  discount=0.99  p_trajgoal=0.5/p_randomgoal=0.5
+  arch      residual  width=256  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch=1024  [BASELINE]
+  train     step_cap=1,000,000  plateau>=200,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  run_id                                                         agent   d seed
+  extract_antmaze_navigate__crl__d4__n1000000__s0__e8f66736      crl     4    0
+  extract_antmaze_navigate__crl__d4__n1000000__s1__9868d044      crl     4    1
+  extract_antmaze_navigate__crl__d4__n1000000__s2__40aa67bf      crl     4    2
+  extract_antmaze_navigate__crl__d8__n1000000__s0__2f4c7f7f      crl     8    0
+  extract_antmaze_navigate__crl__d8__n1000000__s1__e5743c97      crl     8    1
+  extract_antmaze_navigate__crl__d8__n1000000__s2__b44bdd1e      crl     8    2
+
+(nothing written -- add --write to generate configs, --submit to also queue)

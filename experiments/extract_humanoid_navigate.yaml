@@ -1,0 +1,37 @@
+# Does a SHALLOW policy rescue the humanoid reversal?
+#
+# The companion to `extract_antmaze_stitch`; read its header for why freezing a trained
+# CRL critic and re-extracting is the same algorithm in a different order, and for how
+# `offline/extract.py` asserts the freeze rather than arguing it.
+#
+# This is the most interesting of the four, because on humanoidmaze-navigate depth
+# HURTS -- 62.0 -> 53.0 on reeval@50, and 64.2 -> 31.3 where runs settle. The joint
+# grid cannot say which network broke. Two readings this separates:
+#
+#   the deep CRITIC is fine, the deep POLICY came apart
+#       -> extraction at actor_depth 4 should RECOVER the d32 cell, and most of the
+#          21.7-point best-vs-settled gap at d32 was a policy that could not stay on
+#          a value function it was also still chasing.
+#   the deep CRITIC is the problem
+#       -> a 4-layer policy on the d32 critic stays at ~53 and the held-out retrieval
+#          collapse (0.150 -> 0.094, interp__critic_depth 3.1) is the real story.
+#
+# critic_ensemble 1 to match `humanoid_ensemble1`. Published flags for this dataset
+# supply alpha 0.1, discount 0.995 and goal split 1.0/0.0, same as the source.
+#
+#   python src/run.py experiments/extract_humanoid_navigate.yaml --submit
+name: extract_humanoid_navigate
+extract_from: humanoid_ensemble1
+extract_checkpoint: best
+actor_depth: 4
+dataset: humanoidmaze-medium-navigate-v0
+agent: [crl]
+depth: [4, 8, 16, 32]
+seeds: [0, 1]                  # humanoid_ensemble1 ran 2 seeds
+profile: ogbench
+critic_ensemble: 1             # must match the source critic's shape
+repr_dim: 64
+tower: residual
+width: 256
+step_cap: 1000000
+plateau_min_steps: 200000

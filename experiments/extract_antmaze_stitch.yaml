@@ -1,0 +1,64 @@
+# Is the depth gain the CRITIC's, or the policy's?
+#
+# Every grid run so far moves ONE `depth` knob that scales both networks, because
+# `patches.ResidualMLPShim` stands in for OGBench's `MLP` at both call sites --
+# `GCBilinearValue` (the phi/psi critic towers) and `GCActor` (the policy trunk). So
+# "antmaze-stitch CRL goes 35.5 -> 86.7 from d4 to d32" is a statement about a 32-layer
+# critic AND a 32-layer policy. Measured on phase1_repro's own configs:
+#
+#            critic params    actor params
+#   d4        1,163,520          282,888
+#   d32       8,589,568        2,139,400      <- the actor grew 7.6x too
+#
+# This grid separates them WITHOUT retraining a single critic. It freezes
+# phase1_repro's trained critics and re-extracts a policy at a pinned depth 4.
+#
+# WHY REORDERING IS LEGITIMATE (verified in lib/ogbench/impls/agents/crl.py, not assumed)
+#   1. The actor loss never writes to the critic: L111 calls the critic with no
+#      `params=grad_params`, and TrainState treats that as stop-gradient.
+#   2. The critic never depends on the actor: `contrastive_loss` reads the DATASET's
+#      actions and future states from the same trajectory. No bootstrap on pi.
+#   So the critic converges to the behaviour policy's value whatever the actor does,
+#   and joint training differs only in early dynamics -- the actor chasing a critic
+#   that is still moving. This is the one-step view of offline RL
+#   (Brandfonbrener et al. 2021; Park et al. 2024 use it for exactly this separation).
+#
+# THE FREEZE IS ASSERTED, NOT ARGUED. `offline/extract.py` labels the critic subtree
+# `optax.set_to_zero`, never restores the saved `opt_state` (its Adam momentum would
+# keep moving a "frozen" critic), and hashes every critic array before and after
+# training. A mismatch raises and the run fails rather than reporting a number.
+#
+# READ IT AS:
+#   success still climbs d4 -> d32  -> the gain is the CRITIC's. A 4-layer policy can
+#                                      exploit a 32-layer critic, and the headline
+#                                      result is about value learning.
+#   the climb flattens              -> much of the gain was the deeper POLICY, and the
+#                                      headline needs restating as a statement about
+#                                      scaling both networks together.
+#
+# CONTROL, and it comes free: the d4 row is a d4 critic with a d4 actor, which is
+# phase1_repro's d4 cell in two stages instead of one. Any gap there is the
+# two-stage-vs-joint effect, and it calibrates every other row.
+#
+# Critic arch must match the source exactly or the graft's shape check fails --
+# critic_ensemble 2 here because phase1_repro used the default.
+#
+#   python src/run.py experiments/extract_antmaze_stitch.yaml
+#   python src/run.py experiments/extract_antmaze_stitch.yaml --submit
+name: extract_antmaze_stitch
+extract_from: phase1_repro     # freeze THESE critics
+extract_checkpoint: best       # params_best.pkl, the checkpoint reeval@50 scores
+actor_depth: 4                 # <- pinned; `depth` below still selects the critic
+dataset: antmaze-medium-stitch-v0
+agent: [crl]
+depth: [4, 8, 16, 32]          # the CRITIC ladder, matching phase1_repro
+seeds: [0, 1, 2]
+profile: ogbench
+critic_ensemble: 2             # must match the source critic's shape
+repr_dim: 64
+tower: residual
+width: 256
+# Actor-only training converges far sooner than joint: there is no contrastive loss,
+# and the target it is chasing no longer moves.
+step_cap: 1000000
+plateau_min_steps: 200000

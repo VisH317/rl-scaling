@@ -115,6 +115,7 @@ SELFTESTS = [
     ("offline.config resolves", ["-m", "offline.config"]),
     ("residual tower self-test", ["-m", "offline.networks"]),
     ("critic losses self-test", ["-m", "offline.critic_losses"]),
+    ("frozen-critic extraction self-test", ["-m", "offline.extract"]),
     ("critic_heatmap metrics self-test",
      ["-m", "offline.evals.critic_heatmap.impl"]),
 ]

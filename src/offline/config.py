@@ -366,11 +366,28 @@ class ArchConfig:
     tower: Literal["residual", "mlp", "ogbench_mlp"] = "residual"
     #: Only read when tower == "ogbench_mlp"; otherwise width/depth drive the tower.
     ogbench_hidden_dims: tuple = (512, 512, 512)
+    #: Depth of the ACTOR trunk, when it should differ from the critic's.
+    #:
+    #: `depth` alone scales both networks: `patches.ResidualMLPShim` stands in for
+    #: OGBench's `MLP` at both call sites, `GCBilinearValue` (the phi/psi critic towers)
+    #: and `GCActor` (the policy trunk). Every grid run so far therefore confounds
+    #: actor depth with critic depth -- "depth 32" means a 32-layer policy too.
+    #:
+    #: None (the default) keeps that behaviour AND keeps the key out of the resolved
+    #: config entirely, so no existing run id moves. Set it to pin the actor while the
+    #: critic varies, which is what the actor-extraction grids do.
+    actor_depth: int | None = None
 
     def __post_init__(self) -> None:
         if self.tower == "residual" and self.depth % self.block_size != 0:
             raise ValueError(
                 f"depth {self.depth} must be divisible by block_size {self.block_size}"
+            )
+        if (self.actor_depth is not None and self.tower == "residual"
+                and self.actor_depth % self.block_size != 0):
+            raise ValueError(
+                f"actor_depth {self.actor_depth} must be divisible by "
+                f"block_size {self.block_size}"
             )
 
 
@@ -863,7 +880,11 @@ def run_config(
         "subset_id": _subset_id(spec.dataset, size),
         "size": size if size is not None else ds.transitions_per_shard,
         "seed": seed,
-        "arch": dataclasses.asdict(base),
+        # `actor_depth=None` is dropped, not serialised: it is in the resolved config
+        # only when it is actually doing something. _run_id hashes this dict, so
+        # emitting a null would re-key every run ever made.
+        "arch": {k: v for k, v in dataclasses.asdict(base).items()
+                 if not (k == "actor_depth" and v is None)},
         "agent": dataclasses.asdict(agent),
         "train": {
             k: v for k, v in dataclasses.asdict(TRAIN).items() if k != "step_caps"

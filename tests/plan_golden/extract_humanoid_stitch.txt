@@ -1,0 +1,24 @@
+extract_humanoid_stitch   (<repo>/experiments/extract_humanoid_stitch.yaml)
+  dataset   humanoidmaze-medium-stitch-v0  size 2,000,000
+  axes      agent=['crl']  depth=[4, 8, 16, 32]
+  seeds     [0, 1]
+  runs      8
+  critic    binary_nce / dot / lse=0.0 / ensemble=1 / repr_dim=64
+  actor     ddpgbc  alpha=0.1  discount=0.995  p_trajgoal=0.5/p_randomgoal=0.5
+  arch      residual  width=256  block=4  init=lecun_uniform
+  optim     adam lr=0.0003 constant batch=1024  [BASELINE]
+  train     step_cap=1,000,000  plateau>=200,000  eval every 100,000 x 15 eps/task
+  cost      <cost>
+            full breakdown: <cmd>
+
+  run_id                                                         agent   d seed
+  extract_humanoid_stitch__crl__d4__n2000000__s0__37349e6a       crl     4    0
+  extract_humanoid_stitch__crl__d4__n2000000__s1__3bc223b3       crl     4    1
+  extract_humanoid_stitch__crl__d8__n2000000__s0__cbd19647       crl     8    0
+  extract_humanoid_stitch__crl__d8__n2000000__s1__6f9983ef       crl     8    1
+  extract_humanoid_stitch__crl__d16__n2000000__s0__22ffe2cb      crl    16    0
+  extract_humanoid_stitch__crl__d16__n2000000__s1__652ff001      crl    16    1
+  extract_humanoid_stitch__crl__d32__n2000000__s0__e983f813      crl    32    0
+  extract_humanoid_stitch__crl__d32__n2000000__s1__54865ed5      crl    32    1
+
+(nothing written -- add --write to generate configs, --submit to also queue)

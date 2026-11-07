@@ -233,6 +233,23 @@ def main() -> int:
         agent = agent_class.create(
             run_cfg["seed"], example["observations"], example["actions"], og_cfg
         )
+        # ---- two-stage extraction: graft a trained critic in and freeze it --------
+        critic_fp = None
+        if run_cfg.get("extract"):
+            from offline import extract as X
+            ex = run_cfg["extract"]
+            src_dir = X.find_source_run(
+                C.RUNS_DIR, ex["source_grid"], run_cfg["agent"]["agent"],
+                run_cfg["arch"]["depth"], run_cfg["seed"])
+            src_params = X.load_source_params(src_dir, ex["checkpoint"])
+            agent, critic_fp = X.prepare(
+                agent, src_params, float(run_cfg["optim"]["lr"]), agent_class)
+            ex["source_run"] = os.path.basename(src_dir)
+            ex["critic_fingerprint"] = critic_fp
+            print(f"[{run_cfg['run_id']}] extracting from {ex['source_run']} "
+                  f"({ex['checkpoint']}); critic frozen, fingerprint {critic_fp}",
+                  flush=True)
+
         params = agent_param_report(agent)
         run_cfg["params"] = params
         with open(os.path.join(run_dir, "config.json"), "w") as f:
@@ -363,6 +380,21 @@ def main() -> int:
         if ck["save_final"]:
             save_agent(agent, os.path.join(run_dir, "checkpoints"), "final")
 
+        # The freeze is asserted from the arrays, not argued from the loss. If this
+        # ever fires, every number the run produced is about a critic that moved.
+        extract_info = None
+        if critic_fp is not None:
+            from offline import extract as X
+            after = X.critic_fingerprint(agent.network.params)
+            if after != critic_fp:
+                raise RuntimeError(
+                    f"FROZEN CRITIC MOVED during extraction: {critic_fp} -> {after}. "
+                    f"Results from this run are invalid."
+                )
+            extract_info = {**run_cfg["extract"], "critic_fingerprint_after": after,
+                            "critic_verified_frozen": True}
+            print(f"[{run_cfg['run_id']}] critic verified frozen ({after})", flush=True)
+
         summary = {
             "run_id": run_cfg["run_id"],
             "state": "done",
@@ -372,6 +404,7 @@ def main() -> int:
             # The published scoring convention: mean of the last 3 evaluations.
             "last3_eval_mean": round(float(np.mean(recent)), 4) if recent else None,
             "last3_evals": [round(v, 4) for v in recent],
+            "extract": extract_info,
             "final_step": step,
             "step_cap": cap,
             "gradient_steps": step,

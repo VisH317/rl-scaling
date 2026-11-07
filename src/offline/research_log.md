@@ -973,6 +973,67 @@ trajectories). The runs were unaffected — `mode: native` loads the whole file 
 2× for that entry. Not corrected here because `size` feeds the run id, so the fix
 would re-key and orphan all 8 E4 runs. Needs a pinned `size` in the grid spec first.
 
+### E8 — actor extraction: separating critic depth from policy depth  · built 2026-11-06, not yet submitted
+**Question:** every grid so far moves ONE `depth` knob that scales the critic *and* the
+policy, because `patches.ResidualMLPShim` stands in for OGBench's `MLP` at both call
+sites — `GCBilinearValue` (phi/psi) and `GCActor` (the policy trunk). Read from
+`phase1_repro`'s own configs: d4 is critic 1,163,520 / actor 282,888, d32 is
+8,589,568 / 2,139,400 — **the actor grew 7.6× too**. So "antmaze-stitch goes
+35.5 → 86.7" is a claim about scaling both networks together, and every headline in
+`results/` inherits that ambiguity. GCBC gives partial leverage (actor-only, saturates
+at d8) but it is not the same experiment.
+**Method:** freeze a trained critic, re-initialise the actor at a pinned `actor_depth`,
+train the actor loss alone. No critic is retrained.
+**Why reordering is legitimate — verified in `lib/ogbench/impls/agents/crl.py`, not
+assumed:**
+1. The actor loss never writes to the critic. `actor_loss` L111 calls
+   `self.network.select('critic')(...)` with **no** `params=grad_params`, and
+   `TrainState.__call__` documents a missing `params` as stop-gradient. Critic
+   gradients therefore come only from `contrastive_loss`.
+2. The critic never depends on the actor. `contrastive_loss` reads `batch['actions']`
+   (the dataset's) and `batch['value_goals']` (future states on the same trajectory).
+   No bootstrap on pi, so the critic converges to the behaviour policy's value
+   whatever the actor does: `f*(s,a,g) = log[p^beta(g|s,a)/p(g)] + const`.
+
+Joint training differs only in early dynamics — the actor chasing a critic that is
+still moving. This is the one-step view of offline RL (Brandfonbrener et al. 2021), and
+the decoupling Park et al. 2024 used to separate value learning from policy extraction.
+3. `ddpgbc` normalises by its own scale, `-q.mean() / stop_gradient(|q|.mean() + 1e-6)`
+   (L115). `interp__critic_depth` found Q's level is arbitrary per run, so this matters:
+   every critic presents the actor with the same effective objective, which is what
+   makes extraction comparable across depths and environments.
+
+**The failure this is built around.** Dropping the critic loss is not sufficient if the
+saved `opt_state` is restored with it — verified present in every `params_best.pkl`
+alongside `params` — because Adam's stored momentum keeps integrating and the "frozen"
+critic drifts. `offline/extract.py` never reads `opt_state`, labels the critic subtree
+`optax.set_to_zero`, and **hashes every critic array before and after training**; a
+mismatch raises and the run fails rather than reporting a number.
+**Verified end to end before any submission**, not just in the unit self-test: a real
+`phase1_repro` d32 checkpoint (8,589,568 critic params) grafted into an agent with a
+d4 actor (282,888), 10 real `agent.update` calls, fingerprint `b5c2b9dac263e50a`
+unchanged, actor moved, and the logged loss keys are actor-only.
+**Grids — one per environment, all `actor_depth: 4`, critic ladder unchanged:**
+
+| experiment | source grid | critic depths | seeds | sources resolvable |
+|---|---|---|---|---|
+| `extract_antmaze_stitch` | `phase1_repro` | 4/8/16/32 | 3 | 12 / 12 |
+| `extract_humanoid_navigate` | `humanoid_ensemble1` | 4/8/16/32 | 2 | 8 / 8 |
+| `extract_antmaze_navigate` | `antmaze_navigate1` | 4/8 | 3 | 6 / 6 |
+| `extract_humanoid_stitch` | `humanoid_stitch1` | 4/8/16/32 | 2 | blocked on E7 |
+
+**Read:** success still climbing d4 → d32 with a fixed 4-layer policy means the gain is
+the **critic's**. A flattening means much of it was the deeper policy and the headline
+needs restating. The d4 row is a free control — d4 critic with d4 actor is
+`phase1_repro`'s d4 cell in two stages, so any gap there is the two-stage-vs-joint
+effect and calibrates every other row. `extract_antmaze_navigate` is a negative
+control: at a d4 ceiling of 99.6 there is no headroom, so if extraction does not hold
+~99 there, the procedure is losing something and the other three readings are suspect.
+**Not built:** the converse sweep (critic pinned at 32, actor 4→32) would isolate the
+actor the same way. `actor_depth` is not in `SWEEPABLE`, and adding it needs a
+`VISIBLE_AXES` entry so `plot_results` does not silently average two actor depths into
+one point.
+
 ---
 
 ## 6. Changelog
