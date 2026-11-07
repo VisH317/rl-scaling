@@ -229,6 +229,36 @@ The two failure modes look identical in the success rate and are distinguishable
 here. `oracle_gap_split_bins` restricts to the disagreeing bins, where the distinction
 is sharpest.
 
+### `*_norm` and `q_scale` — dimensionless · the forms to quote across runs
+
+Q is an unnormalised log-density-ratio. Its level *and* its spread are arbitrary per
+run, which this suite measured directly: `q_scale` varies substantially between
+depths and between environments. A difference of two Q values, in logits, therefore
+cannot be compared across runs — a bigger number may only mean a critic with a wider
+output range.
+
+`q_scale` is the **per-task standard deviation of a reference Q field** over the usable
+bins, reference chosen as the first of `q_policy`, `q_oracle_geodesic`, `q_dataset`
+that is present and named in the output. It is computed over *all* usable bins, not
+over each metric's own mask, so every normalised metric is divided by the same number
+and they stay comparable to each other.
+
+| metric | units | compare across runs? |
+|---|---|---|
+| `action_topology_gain`, `oracle_gap` | logits | **no** — sign and trend only |
+| `action_topology_gain_norm`, `oracle_gap_norm` | SDs of that run's Q | **yes** |
+| `q_scale` | logits | it IS the scale; useful on its own |
+
+Normalisation is per task, then averaged, because the spread of Q genuinely differs
+between the five tasks and one pooled SD would flatten that. A task whose scale is
+below 1e-9 is dropped rather than divided — a flat critic has no meaningful unit, and
+0/0 would otherwise arrive looking like a real number. `n_tasks_scored` records how
+many survived.
+
+The self-check asserts the defining property directly: multiplying every Q field by 37
+multiplies `q_scale` and the raw metrics by 37.0 and leaves the `_norm` values
+unchanged to 4 decimal places.
+
 ### The same metrics on the other fields
 
 Every metric is computed for `q_policy`, `q_dataset`, `advantage`, the ensemble-mean
@@ -288,7 +318,7 @@ geometry, same transform code path, walls drawn as rectangles instead.
 | file | contents |
 |---|---|
 | `field.npz` | `q_<source>` for each action source, plus `q_*_ens_mean`, `q_*_dispersion_sd`, the difference fields (`oracle_geo_minus_euclid`, `policy_minus_oracle`, `advantage`), `ens_gap`, `dir_angle_deg`, `geodesic`, `euclid` — each `(5, Hf, Wf)` — plus `maze`, `fine`, `count`, `occupied` |
-| `metrics.json` | every metric above, per field, per task, plus the across-task mean; `_cross` holds the between-source metrics (`action_topology_gain`, `oracle_gap`, `split_bin_fraction`) |
+| `metrics.json` | every metric above, per field, per task, plus the across-task mean; `_cross` holds the between-source metrics (`action_topology_gain`, `oracle_gap`, their `_norm` companions, `q_scale`, `split_bin_fraction`) |
 | `meta.json` | run id, depth, seed, param counts, selection rule and the whole seed set, the state files used, every goal `xy` drawn, the expert checkpoint, the render calibration, timing |
 
 `q_*_dispersion_sd` is the spread of `Q` within a bin across both the states in it and
@@ -302,7 +332,7 @@ the goal draws — a large value says the bin's single number is hiding structur
 | `fig2_topology` | `rho_geodesic` / `rho_euclid` / `topology_gain` vs depth |
 | `fig4_metrics` | `peak_geodesic` / `path_monotone` / `goal_percentile` vs depth |
 | `fig5_action_preference` | `Q[geodesic] − Q[straight]`, diverging, **only on the disagreeing bins** — the others are drawn pale, because the question does not apply there, which is a different thing from having no data (hatched) |
-| `fig6_action_tests` | `action_topology_gain` and `oracle_gap` vs depth |
+| `fig6_action_tests` | `action_topology_gain` and `oracle_gap` vs depth, raw (top row, logits) and scale-free (bottom row), mean ± 1 SD over seeds |
 | `fig3_advantage_field` | only if `dataset` is in `action_sources` |
 
 ## How to read it
@@ -341,5 +371,7 @@ the goal draws — a large value says the bin's single number is hiding structur
    to follow a commanded direction, not to solve these five goals. Feeding it the
    geodesic direction makes it act optimally *given that direction is right*; it says
    nothing about whether an even better action exists.
-6. **`action_topology_gain` and `oracle_gap` are in logits**, so they are comparable
-   across depths only in sign and trend, never in magnitude.
+6. **`action_topology_gain` and `oracle_gap` are in logits**, so the RAW forms are
+   comparable across depths only in sign and trend, never in magnitude. Since
+   2026-11-06 each also has a `_norm` companion divided by `q_scale`; quote those for
+   anything cross-depth, cross-seed or cross-environment. See the section below.

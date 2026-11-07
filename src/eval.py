@@ -170,7 +170,9 @@ def plan(cfg: dict, tasks: list, notes: list) -> None:
             print(f"  {t['eval']:<16}{t['depth']:>4}{t['seed']:>5}"
                   f"{s['score']:>9.3f}  {s['rule_used']:<16}"
                   f"{s['spread']:>8.3f}  {t['run_id']}")
-        print(f"\n  seeds not picked (the spread is as real as the depth effect):")
+        _all = cfg["seed_select"] == "all"
+        print("\n  " + ("every seed, and its score (all are run):" if _all else
+                        "seeds NOT picked (the spread is as real as the depth effect):"))
         seen = set()
         for t in tasks:
             k = (t["grid"], t["agent"], t["depth"])

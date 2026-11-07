@@ -26,7 +26,13 @@ depths: [4, 8, 16, 32]
 #   best_success  the best training-time eval (15 episodes/task)
 #   last3         mean of the final three training evals
 #   all           no selection; every seed becomes its own task
-seed_select: reeval
+# `all` since 2026-11-06: every seed becomes its own task. One seed cannot show
+# whether a depth trend survives seed noise, and `interp__critic_depth`'s headline
+# claims (rho falling on antmaze, action_topology_gain rising) were each read off a
+# single run. Metric figures now plot mean +/- 1 SD over seeds with the seeds as dots;
+# the image grids still show one seed per depth, or a 4-depth x 3-seed x 5-task suite
+# would render 60 panels. Cost scales with the seed count: ~3x on antmaze, 2x humanoid.
+seed_select: all
 checkpoint: best                 # params_<checkpoint>.pkl
 
 # false also admits runs that are still training, scored from the tail of eval.csv

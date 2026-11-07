@@ -1,28 +1,52 @@
 interp01   (<repo>/src/offline/evals/evals.yaml)
   grids     ['phase1_repro', 'humanoid_ensemble1']   agents ['crl']   depths [4, 8, 16, 32]
-  select    reeval  checkpoint=<sel>
+  select    all  checkpoint=<sel>
   output    <scratch>/rl-scaling/experiments/analysis/evals/interp01
-  tasks     16
+  tasks     40
 
   eval               d seed   select  rule              spread  run_id
   critic_heatmap     4    1    0.452  reeval@50          0.224  phase1_repro__crl__d4__n1000000__s1__acdde8ae
+  critic_heatmap     4    0    0.384  reeval@50          0.224  phase1_repro__crl__d4__n1000000__s0__b83f1e8b
+  critic_heatmap     4    2    0.228  reeval@50          0.224  phase1_repro__crl__d4__n1000000__s2__9ad8e9d4
   critic_heatmap     8    2    0.568  reeval@50          0.096  phase1_repro__crl__d8__n1000000__s2__43511f71
+  critic_heatmap     8    0    0.556  reeval@50          0.096  phase1_repro__crl__d8__n1000000__s0__f813301a
+  critic_heatmap     8    1    0.472  reeval@50          0.096  phase1_repro__crl__d8__n1000000__s1__a965c3a1
   critic_heatmap    16    2    0.880  reeval@50          0.176  phase1_repro__crl__d16__n1000000__s2__c674fc85
+  critic_heatmap    16    1    0.740  reeval@50          0.176  phase1_repro__crl__d16__n1000000__s1__5ac42ece
+  critic_heatmap    16    0    0.704  reeval@50          0.176  phase1_repro__crl__d16__n1000000__s0__bd08cc0c
   critic_heatmap    32    1    0.904  reeval@50          0.072  phase1_repro__crl__d32__n1000000__s1__1e7813ba
+  critic_heatmap    32    2    0.864  reeval@50          0.072  phase1_repro__crl__d32__n1000000__s2__c92f51af
+  critic_heatmap    32    0    0.832  reeval@50          0.072  phase1_repro__crl__d32__n1000000__s0__1f847ae3
   critic_heatmap     4    1    0.632  reeval@50          0.024  humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09
+  critic_heatmap     4    0    0.608  reeval@50          0.024  humanoid_ensemble1__crl__d4__n1000000__s0__afee9b28
   critic_heatmap     8    0    0.660  reeval@50          0.020  humanoid_ensemble1__crl__d8__n1000000__s0__a857e3c3
+  critic_heatmap     8    1    0.640  reeval@50          0.020  humanoid_ensemble1__crl__d8__n1000000__s1__a963cbb2
   critic_heatmap    16    1    0.608  reeval@50          0.116  humanoid_ensemble1__crl__d16__n1000000__s1__a7dcc884
+  critic_heatmap    16    0    0.492  reeval@50          0.116  humanoid_ensemble1__crl__d16__n1000000__s0__a548fd8f
   critic_heatmap    32    1    0.600  reeval@50          0.140  humanoid_ensemble1__crl__d32__n1000000__s1__9ca3fb59
+  critic_heatmap    32    0    0.460  reeval@50          0.140  humanoid_ensemble1__crl__d32__n1000000__s0__d1da46a4
   state_probes       4    1    0.452  reeval@50          0.224  phase1_repro__crl__d4__n1000000__s1__acdde8ae
+  state_probes       4    0    0.384  reeval@50          0.224  phase1_repro__crl__d4__n1000000__s0__b83f1e8b
+  state_probes       4    2    0.228  reeval@50          0.224  phase1_repro__crl__d4__n1000000__s2__9ad8e9d4
   state_probes       8    2    0.568  reeval@50          0.096  phase1_repro__crl__d8__n1000000__s2__43511f71
+  state_probes       8    0    0.556  reeval@50          0.096  phase1_repro__crl__d8__n1000000__s0__f813301a
+  state_probes       8    1    0.472  reeval@50          0.096  phase1_repro__crl__d8__n1000000__s1__a965c3a1
   state_probes      16    2    0.880  reeval@50          0.176  phase1_repro__crl__d16__n1000000__s2__c674fc85
+  state_probes      16    1    0.740  reeval@50          0.176  phase1_repro__crl__d16__n1000000__s1__5ac42ece
+  state_probes      16    0    0.704  reeval@50          0.176  phase1_repro__crl__d16__n1000000__s0__bd08cc0c
   state_probes      32    1    0.904  reeval@50          0.072  phase1_repro__crl__d32__n1000000__s1__1e7813ba
+  state_probes      32    2    0.864  reeval@50          0.072  phase1_repro__crl__d32__n1000000__s2__c92f51af
+  state_probes      32    0    0.832  reeval@50          0.072  phase1_repro__crl__d32__n1000000__s0__1f847ae3
   state_probes       4    1    0.632  reeval@50          0.024  humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09
+  state_probes       4    0    0.608  reeval@50          0.024  humanoid_ensemble1__crl__d4__n1000000__s0__afee9b28
   state_probes       8    0    0.660  reeval@50          0.020  humanoid_ensemble1__crl__d8__n1000000__s0__a857e3c3
+  state_probes       8    1    0.640  reeval@50          0.020  humanoid_ensemble1__crl__d8__n1000000__s1__a963cbb2
   state_probes      16    1    0.608  reeval@50          0.116  humanoid_ensemble1__crl__d16__n1000000__s1__a7dcc884
+  state_probes      16    0    0.492  reeval@50          0.116  humanoid_ensemble1__crl__d16__n1000000__s0__a548fd8f
   state_probes      32    1    0.600  reeval@50          0.140  humanoid_ensemble1__crl__d32__n1000000__s1__9ca3fb59
+  state_probes      32    0    0.460  reeval@50          0.140  humanoid_ensemble1__crl__d32__n1000000__s0__d1da46a4
 
-  seeds not picked (the spread is as real as the depth effect):
+  every seed, and its score (all are run):
     d4   {'1': 0.452, '0': 0.384, '2': 0.228}
     d8   {'2': 0.568, '0': 0.556, '1': 0.472}
     d16  {'2': 0.88, '1': 0.74, '0': 0.704}
@@ -33,7 +57,7 @@ interp01   (<repo>/src/offline/evals/evals.yaml)
     d32  {'1': 0.6, '0': 0.46}
 
   cost      <cost>
-            Job wall limit 16:00:00 = 16 x the longest eval's cap. That is a CAP, not an estimate;
+            Job wall limit 24:00:00 = 40 x the longest eval's cap. That is a CAP, not an estimate;
             each task records its real `secs` in meta.json, which is what to calibrate from.
 
   evals on disk:

@@ -97,15 +97,32 @@ def fig_probe_vs_depth(recs, out_dir, suffix="", site_override=None):
         ax = axes[k // ncol][k % ncol]
         ax.set_facecolor(P.SURFACE)
         site = site_override or SITE_OF[tname]
+        # Average over every seed at a depth. This used to be `next(...)`, which took
+        # the FIRST record and silently ignored the others -- harmless while the suite
+        # ran one seed per depth, wrong the moment `seed_select: all` landed, and
+        # invisible either way because the chart looked identical.
         series = {"learned": [], "random_init": [], "shuffled": [], "raw_obs": []}
+        spread = {k: [] for k in series}
+        per_seed = []
         for d in depths:
-            rec = next((r for r in recs if r["meta"]["depth"] == d), None)
-            R = rec["records"] if rec else []
-            series["learned"].append(_g(_pick(R, site, tname, _primary)))
-            series["random_init"].append(_g(_pick(R, site, tname, _random)))
-            series["shuffled"].append(_g(_pick(R, site, tname, _primary, True)))
-            series["raw_obs"].append(_g(_pick(R, site, tname,
-                                              lambda f: f == "raw_obs")))
+            at_d = [r for r in recs if r["meta"]["depth"] == d]
+            picks = {
+                "learned": lambda R: _pick(R, site, tname, _primary),
+                "random_init": lambda R: _pick(R, site, tname, _random),
+                "shuffled": lambda R: _pick(R, site, tname, _primary, True),
+                "raw_obs": lambda R: _pick(R, site, tname,
+                                           lambda f: f == "raw_obs"),
+            }
+            for name, fn in picks.items():
+                vals = [v for v in (_g(fn(r["records"])) for r in at_d)
+                        if v is not None]
+                series[name].append(float(np.mean(vals)) if vals else None)
+                spread[name].append(float(np.std(vals)) if vals else None)
+            for r in at_d:
+                for name, fn in picks.items():
+                    v = _g(fn(r["records"]))
+                    if v is not None:
+                        per_seed.append((d, r["meta"]["seed"], name, v))
         metric = "accuracy" if tname == "maze_cell" else "r2"
         for name, colour, style, lw in (
                 ("learned", LEARNED, "solid", 2.0),
@@ -115,16 +132,29 @@ def fig_probe_vs_depth(recs, out_dir, suffix="", site_override=None):
             ys = series[name]
             if all(y is None for y in ys):
                 continue
-            xs = [d for d, y in zip(depths, ys) if y is not None]
-            vs = [y for y in ys if y is not None]
+            keep = [i for i, y in enumerate(ys) if y is not None]
+            xs = [depths[i] for i in keep]
+            vs = [ys[i] for i in keep]
+            sds = [spread[name][i] or 0.0 for i in keep]
             # linestyle=, never the third positional arg: a dash-pattern tuple is
             # not a format string and matplotlib rejects it.
             ax.plot(xs, vs, linestyle=style, color=colour, linewidth=lw,
                     marker="o" if name == "learned" else None, markersize=6,
                     label=name, zorder=4 if name == "learned" else 2)
-            for d, y in zip(xs, vs):
+            if name == "learned" and any(sd > 0 for sd in sds):
+                # Only the learned series gets a band; four bands would be mud.
+                ax.fill_between(xs, [v - sd for v, sd in zip(vs, sds)],
+                                [v + sd for v, sd in zip(vs, sds)],
+                                color=colour, alpha=0.16, linewidth=0, zorder=3)
+            for i, (d, y) in enumerate(zip(xs, vs)):
                 rows.append([suffix.strip("_") or "", tname, site, name, d,
-                             metric, round(y, 4)])
+                             metric, round(y, 4), round(sds[i], 4),
+                             sum(1 for pd, _, pn, _ in per_seed
+                                 if pd == d and pn == name), ""])
+        # One row per seed as well, so the CSV keeps what the band summarises.
+        for d, seed, name, v in per_seed:
+            rows.append([suffix.strip("_") or "", tname, site, name, d,
+                         metric, round(v, 4), "", 1, seed])
         ax.axhline(0, color=P.AXIS, linewidth=0.8, zorder=1)
         ax.set_xscale("log", base=2)
         ax.set_xticks(depths)
@@ -145,10 +175,13 @@ def fig_probe_vs_depth(recs, out_dir, suffix="", site_override=None):
     fig.text(0.5, 0.005,
              "* the headline target.  Held out by TRAJECTORY. `learned` must beat "
              "BOTH controls to mean anything: raw_obs is the same probe on the raw "
-             "input THAT TOWER sees, random_init the same architecture untrained.",
+             "input THAT TOWER sees, random_init the same architecture untrained. "
+             "Lines are the mean over seeds; the band on `learned` is 1 SD. Rows with "
+             "a `seed` are the individual runs behind it.",
              color=P.MUTED, fontsize=8, ha="center")
     return P.save(fig, out_dir, f"fig1_probe_vs_depth{suffix}", rows,
-                  ["grid", "target", "site", "series", "depth", "metric", "score"])
+                  ["grid", "target", "site", "series", "depth", "metric", "score",
+                   "sd_over_seeds", "n_seeds", "seed"])
 
 
 def _g(r):

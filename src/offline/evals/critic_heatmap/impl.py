@@ -399,9 +399,59 @@ def run(task: dict) -> dict:
     print(f"  d{meta['depth']} s{meta['seed']}  "
           f"rho_geo={headline.get('rho_geodesic')}  "
           f"topology_gain={headline.get('topology_gain')}  "
-          f"action_topology_gain={cross.get('action_topology_gain', {}).get('mean')}  "
-          f"oracle_gap={cross.get('oracle_gap', {}).get('mean')}  ({meta['secs']}s)")
+          f"atg={cross.get('action_topology_gain', {}).get('mean')}"
+          f"/{cross.get('action_topology_gain_norm', {}).get('mean')}n  "
+          f"oracle_gap={cross.get('oracle_gap', {}).get('mean')}"
+          f"/{cross.get('oracle_gap_norm', {}).get('mean')}n  "
+          f"q_scale={cross.get('q_scale', {}).get('mean')}  ({meta['secs']}s)")
     return dict(meta=meta, metrics=metrics)
+
+
+#: Field whose spread defines the run's Q scale, first one present wins.
+Q_SCALE_FIELD_ORDER = ("q_policy", "q_oracle_geodesic", "q_dataset")
+
+
+def q_scale_per_task(fields, geodesic, count, min_states, tasks):
+    """Per-task SD of a reference Q field over usable bins. `(scale, field_name)`.
+
+    Q is an unnormalised log-density-ratio in logits whose level AND spread are
+    arbitrary per run -- `interp__critic_depth` found exactly that. So a difference
+    between two action sources, measured in logits, cannot be compared across depths
+    or environments until it is divided by something with the same units. This is that
+    something.
+
+    Deliberately computed over ALL usable bins, not over each metric's own mask: the
+    scale is a property of the critic, so both normalised metrics are divided by the
+    same number and stay comparable to each other. Per-task, because the spread of Q
+    genuinely differs between tasks and a single pooled SD would flatten that.
+    """
+    for name in Q_SCALE_FIELD_ORDER:
+        ref = fields.get(name)
+        if ref is None:
+            continue
+        scale = []
+        for ti in range(len(tasks)):
+            m = (np.isfinite(geodesic[ti]) & (count >= min_states)
+                 & np.isfinite(ref[ti]))
+            v = ref[ti][m]
+            scale.append(float(v.std()) if v.size >= 8 else float("nan"))
+        return scale, name
+    return None, None
+
+
+def _normalised(summary: dict, scale) -> dict:
+    """`summary` divided per-task by `scale`, then averaged. Dimensionless.
+
+    A task whose scale is ~0 is dropped rather than divided: a flat critic has no
+    meaningful unit, and 0/0 would otherwise arrive as a plausible-looking number.
+    """
+    per_task = []
+    for v, sd in zip(summary["per_task"], scale):
+        ok = (v == v) and (sd == sd) and sd > 1e-9
+        per_task.append(round(float(v) / float(sd), 4) if ok else float("nan"))
+    finite = [v for v in per_task if v == v]
+    return dict(mean=round(float(np.mean(finite)), 4) if finite else float("nan"),
+                per_task=per_task, n_tasks_scored=len(finite))
 
 
 def cross_metrics(fields, geo, geodesic, count, min_states, tasks,
@@ -412,9 +462,14 @@ def cross_metrics(fields, geo, geodesic, count, min_states, tasks,
     directions actually disagree by more than `split_deg`. Everywhere else the two
     oracle actions are nearly the same action and their difference is noise, so
     averaging over all bins would dilute the signal with bins that cannot speak to it.
+
+    Every logit-valued metric is reported twice: raw, in logits, and `_norm`, divided
+    by the run's own Q scale. Only the `_norm` form may be compared across depths,
+    seeds or environments.
     """
     out = {}
     ang = fields.get("dir_angle_deg")
+    scale, scale_field = q_scale_per_task(fields, geodesic, count, min_states, tasks)
 
     def _summarise(arr, mask_by_angle):
         per_task, n_bins = [], []
@@ -438,6 +493,18 @@ def cross_metrics(fields, geo, geodesic, count, min_states, tasks,
     if "policy_minus_oracle" in fields:
         out["oracle_gap"] = _summarise(fields["policy_minus_oracle"], False)
         out["oracle_gap_split_bins"] = _summarise(fields["policy_minus_oracle"], True)
+
+    # Scale-free companions. These, not the raw logits above, are what a cross-depth
+    # or cross-environment table should quote.
+    if scale is not None:
+        out["q_scale"] = dict(mean=round(float(np.nanmean(scale)), 4),
+                              per_task=[round(v, 4) if v == v else float("nan")
+                                        for v in scale],
+                              field=scale_field)
+        for key in ("action_topology_gain", "action_topology_gain_all_bins",
+                    "oracle_gap", "oracle_gap_split_bins"):
+            if key in out:
+                out[f"{key}_norm"] = _normalised(out[key], scale)
     if ang is not None and np.isfinite(ang).any():
         free = np.isfinite(geodesic) & (count[None] >= min_states)
         out["split_bin_fraction"] = round(
@@ -502,6 +569,44 @@ def _selftest() -> int:
     sparse[5, 5] = 99        # a FREE fine bin: cell (1, 1) spans bins 4..7
     m4 = field_metrics(-gd, geo, gd, ed, t["init_xy"], t["goal_xy"], sparse, 10)
     check("masked n_bins", float(m4["n_bins"]), 1.0)
+
+    # 5. Scale-freedom. This is the defining property of the `_norm` metrics: multiply
+    #    every Q field by a constant and the raw logit metrics must scale with it while
+    #    the normalised ones do not move at all.
+    tasks1 = [dict(task_id=1, init_ij=t["init_ij"], goal_xy=t["goal_xy"])]
+    gd1, ed1 = gd[None], ed[None]
+
+    def _cross_at(c):
+        f = {"q_policy": c * -gd1,
+             "q_oracle_geodesic": c * -gd1,
+             "q_oracle_euclid": c * -ed1,
+             "oracle_geo_minus_euclid": c * (-gd1 - -ed1),
+             "policy_minus_oracle": c * np.zeros_like(gd1),
+             "dir_angle_deg": np.full_like(gd1, 90.0)}
+        return cross_metrics(f, geo, gd1, count, 1, tasks1, 45.0)
+
+    c1, c2 = _cross_at(1.0), _cross_at(37.0)
+    check("q_scale tracks the field scale",
+          c2["q_scale"]["mean"] / c1["q_scale"]["mean"], 37.0, tol=1e-3)
+    check("raw action_topology_gain scales with Q",
+          c2["action_topology_gain"]["mean"] / c1["action_topology_gain"]["mean"],
+          37.0, tol=1e-3)
+    check("NORMALISED action_topology_gain is scale-free",
+          c2["action_topology_gain_norm"]["mean"],
+          c1["action_topology_gain_norm"]["mean"], tol=1e-4)
+    check("q_scale field identified", float(c1["q_scale"]["field"] == "q_policy"), 1.0)
+
+    # 6. A flat critic has no unit: the normaliser must refuse rather than divide by ~0.
+    flat = np.where(np.isfinite(gd1), 1.0, np.nan)
+    cflat = cross_metrics({"q_policy": flat,
+                           "oracle_geo_minus_euclid": np.zeros_like(flat),
+                           "dir_angle_deg": np.full_like(flat, 90.0)},
+                          geo, gd1, count, 1, tasks1, 45.0)
+    got = cflat["action_topology_gain_norm"]["mean"]
+    good = got != got                      # NaN, not 0.0 and not inf
+    ok &= good
+    print(f"  {'PASS' if good else 'FAIL'}  flat critic -> norm is NaN, not a number: "
+          f"{got}")
 
     print("\n" + ("critic_heatmap metrics: ALL PASS" if ok else "SELF-CHECK FAILED"))
     return 0 if ok else 1

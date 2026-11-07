@@ -315,28 +315,99 @@ def _field_figure(recs, out_dir, *, key, name, cmap, diverging, title, sublabel,
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Seed aggregation
+# ---------------------------------------------------------------------------
+
+def best_seed_per_depth(recs):
+    """One record per depth, the highest-scoring seed.
+
+    The image grids (fig1/fig3/fig5) are depth x task small multiples. With every seed
+    they become depth x seed x task -- 60 panels on a 4-depth, 3-seed grid -- which is
+    not a figure anyone reads. The metrics figures carry all seeds instead, where the
+    spread is the point; these show a representative one and say which.
+    """
+    best = {}
+    for r in recs:
+        d = r["meta"]["depth"]
+        score = (r["meta"].get("selection") or {}).get("score")
+        key = (score if score is not None else float("-inf"), -r["meta"]["seed"])
+        if d not in best or key > best[d][0]:
+            best[d] = (key, r)
+    return [r for _, (_, r) in sorted(best.items())]
+
+
+def by_depth(recs):
+    """`[(depth, [rec, ...]), ...]`, ascending. One entry per depth, all its seeds."""
+    groups = {}
+    for r in recs:
+        groups.setdefault(r["meta"]["depth"], []).append(r)
+    for d in groups:
+        groups[d].sort(key=lambda r: r["meta"]["seed"])
+    return sorted(groups.items())
+
+
+def _agg(recs, getter):
+    """(depths, means, sds, [(depth, value) per seed]) for one scalar metric.
+
+    Depths with no finite value are dropped from the line rather than plotted at
+    zero. The per-seed points are returned too: with n=2 or 3 an error bar is a
+    spread, not an inference, and the raw dots keep that visible.
+    """
+    xs, means, sds, pts = [], [], [], []
+    for d, group in by_depth(recs):
+        vals = [v for v in (getter(r) for r in group)
+                if v is not None and v == v]
+        pts += [(d, v) for v in vals]
+        if not vals:
+            continue
+        xs.append(d)
+        means.append(float(np.mean(vals)))
+        sds.append(float(np.std(vals)))
+    return xs, means, sds, pts
+
+
+def _seed_series(ax, recs, getter, color, label=None):
+    """Mean +/- 1 SD over seeds, with the individual seeds as faint dots."""
+    xs, means, sds, pts = _agg(recs, getter)
+    if not xs:
+        return None
+    if pts:
+        ax.scatter([x for x, _ in pts], [v for _, v in pts], s=14, color=color,
+                   alpha=0.30, zorder=2, clip_on=False, linewidths=0)
+    ax.errorbar(xs, means, yerr=sds, marker="o", ms=8, lw=2.0, color=color,
+                ecolor=color, elinewidth=1.4, capsize=3, label=label,
+                clip_on=False, zorder=3)
+    return xs, means
+
+
+def _n_seeds(recs) -> int:
+    return max((len(g) for _, g in by_depth(recs)), default=0)
+
+
 # Figure 2 / 4 -- metrics against depth
 # ---------------------------------------------------------------------------
 
 def _metric_lines(recs, out_dir, name, title, panels, key="q_policy"):
     if not recs:
         return None
-    depths = [r["meta"]["depth"] for r in recs]
+    depths = sorted({r["meta"]["depth"] for r in recs})
+    n_seeds = _n_seeds(recs)
     fig, axes = plt.subplots(1, len(panels), figsize=(3.5 * len(panels), 3.5),
                              facecolor=P.SURFACE, squeeze=False)
     rows = []
     for pi, (metrics, label, ylim) in enumerate(panels):
         ax = axes[0][pi]
         for si, m in enumerate(metrics):
-            ys = [r["metrics"][key]["mean"].get(m) for r in recs]
             color = P.SERIES["crl"] if si == 0 else P.SERIES["gcbc"]
-            ax.plot(depths, ys, marker="o", ms=8, lw=2.0, color=color, label=m,
-                    clip_on=False, zorder=3)
-            if len(depths) and ys[-1] is not None:
+            got = _seed_series(
+                ax, recs, lambda r, _m=m: r["metrics"][key]["mean"].get(_m),
+                color, label=m)
+            if got and got[0]:
                 # Direct-label the last point only. `annotation_clip=False` plus the
                 # x-margin below keeps it inside the panel instead of over the next
                 # panel's y-axis.
-                ax.annotate(f"{ys[-1]:.2f}", (depths[-1], ys[-1]),
+                ax.annotate(f"{got[1][-1]:.2f}", (got[0][-1], got[1][-1]),
                             textcoords="offset points", xytext=(8, 0), fontsize=8.5,
                             color=P.INK_2, va="center", ha="left",
                             annotation_clip=False)
@@ -366,6 +437,11 @@ def _metric_lines(recs, out_dir, name, title, panels, key="q_policy"):
                                            "top5_geodesic", "path_monotone",
                                            "goal_percentile", "coverage", "q_std")])
     fig.suptitle(title, color=P.INK, fontsize=13, x=0.012, ha="left")
+    fig.text(0.012, -0.03,
+             f"Marker is the mean over {n_seeds} seed(s); bars are 1 SD, faint dots "
+             f"the individual seeds. With n<=3 that is a spread, not a confidence "
+             f"interval. The CSV holds one row per seed.",
+             color=P.MUTED, fontsize=8, ha="left", va="top")
     fig.tight_layout()
     header = (["depth", "seed", "run_id", "select_score", "rho_geodesic", "rho_euclid",
                "topology_gain", "peak_geodesic", "top5_geodesic", "path_monotone",
@@ -379,21 +455,37 @@ def _cross_lines(recs, out_dir, name, title, keys):
     recs = [r for r in recs if any(k in r["metrics"].get("_cross", {}) for k in keys)]
     if not recs:
         return None
-    depths = [r["meta"]["depth"] for r in recs]
-    fig, axes = plt.subplots(1, len(keys), figsize=(4.6 * len(keys), 3.6),
+    depths = sorted({r["meta"]["depth"] for r in recs})
+    n_seeds = _n_seeds(recs)
+    ncol = min(2, len(keys)) if len(keys) > 2 else len(keys)
+    nrow = -(-len(keys) // ncol)
+    fig, axes = plt.subplots(nrow, ncol, figsize=(5.4 * ncol, 3.6 * nrow),
                              facecolor=P.SURFACE, squeeze=False)
+    flat_axes = [a for row in axes for a in row]
+    for a in flat_axes[len(keys):]:
+        a.set_visible(False)
     rows = []
     for pi, (key, label) in enumerate(keys.items()):
-        ax = axes[0][pi]
-        ys = [r["metrics"]["_cross"].get(key, {}).get("mean") for r in recs]
-        ax.plot(depths, ys, marker="o", ms=8, lw=2.0, color=P.SERIES["crl"],
-                clip_on=False, zorder=3)
-        if ys and ys[-1] is not None:
-            ax.annotate(f"{ys[-1]:+.3f}", (depths[-1], ys[-1]),
+        ax = flat_axes[pi]
+        got = _seed_series(
+            ax, recs, lambda r, _k=key: r["metrics"]["_cross"].get(_k, {}).get("mean"),
+            P.SERIES["crl"])
+        if not got:
+            # An empty panel reads as a broken figure. Say which it is: results
+            # computed before the metric existed simply do not carry the key.
+            ax.text(0.5, 0.5, "not in these results\nre-run the suite to compute it",
+                    transform=ax.transAxes, ha="center", va="center",
+                    color=P.MUTED, fontsize=9)
+        if got and got[0]:
+            ax.annotate(f"{got[1][-1]:+.3f}", (got[0][-1], got[1][-1]),
                         textcoords="offset points", xytext=(8, 0), fontsize=8.5,
                         color=P.INK_2, va="center", annotation_clip=False)
         ax.axhline(0.0, color=P.AXIS, lw=1.0, ls=(0, (4, 3)), zorder=1)
-        P.style_axes(ax, xlabel="depth (residual blocks)", title=label)
+        # Normalised panels are dimensionless; raw ones are logits.
+        P.style_axes(ax, xlabel="depth (residual blocks)", title=label,
+                     ylabel=("SDs of this run's Q" if key.endswith("_norm")
+                             else "logits (arbitrary per run)")
+                     if pi % ncol == 0 else "")
         ax.set_xscale("log", base=2)
         ax.set_xticks(depths)
         ax.set_xticklabels([str(d) for d in depths])
@@ -402,22 +494,27 @@ def _cross_lines(recs, out_dir, name, title, keys):
         c = r["metrics"]["_cross"]
         rows.append([r["meta"]["depth"], r["meta"]["seed"], r["meta"]["run_id"]]
                     + [c.get(k, {}).get("mean") for k in keys]
-                    + [c.get("split_bin_fraction"), c.get("direction_split_deg")])
+                    + [c.get("q_scale", {}).get("mean"),
+                       c.get("split_bin_fraction"), c.get("direction_split_deg")])
     fig.suptitle(title, color=P.INK, fontsize=13, x=0.012, ha="left")
     _sd = recs[0]["metrics"]["_cross"].get("direction_split_deg", 45.0)
     _sf = recs[0]["metrics"]["_cross"].get("split_bin_fraction")
     fig.text(0.012, -0.04,
-             f"Left panel is measured only on the bins where the geodesic and "
-             f"straight-line directions disagree by at least {_sd:.0f} deg "
+             f"action_topology_gain is measured only on the bins where the geodesic "
+             f"and straight-line directions disagree by at least {_sd:.0f} deg "
              + (f"({100 * _sf:.0f}% of bins). " if _sf else ". ")
-             + "Both are differences of logits: sign and trend only, never level. "
-               "Above 0 means the critic prefers the maze-correct action.",
+             + "Above 0 means the critic prefers the maze-correct action. Raw panels "
+               "are differences of LOGITS, whose scale is arbitrary per run -- read "
+               "sign and trend, never level, and never across runs. The _norm panels "
+               "divide by that run's own Q spread, so they are dimensionless and ARE "
+               "comparable across depth, seed and environment. "
+             + f"Mean over {n_seeds} seed(s), bars 1 SD, faint dots the seeds.",
              color=P.MUTED, fontsize=8, ha="left", va="top")
     fig.tight_layout()
     P.save(fig, out_dir, name,
            table_rows=rows,
            table_header=["depth", "seed", "run_id"] + list(keys)
-           + ["split_bin_fraction", "direction_split_deg"])
+           + ["q_scale", "split_bin_fraction", "direction_split_deg"])
     return os.path.join(out_dir, f"{name}.png")
 
 
@@ -452,9 +549,16 @@ def _make_one(recs, out_dir, interpolate, suffix="") -> list:
     head = f"  [{ds}]" if suffix else ""
     if head:
         print(head)
+    # Metrics figures use every seed; the image grids use one per depth, or a
+    # 4-depth x 3-seed x 5-task suite would render 60 panels. See best_seed_per_depth.
+    one_per_depth = best_seed_per_depth(recs)
+    n_all, n_shown = len(recs), len(one_per_depth)
+    if n_all != n_shown:
+        print(f"    {n_all} runs; image grids show {n_shown} "
+              f"(best seed per depth), metric figures show all")
     made = []
     made.append(_field_figure(
-        recs, out_dir, key="q_policy", name=nm("fig1_critic_field"), cmap=CMAP_Q,
+        one_per_depth, out_dir, key="q_policy", name=nm("fig1_critic_field"), cmap=CMAP_Q,
         diverging=False, interpolate=interpolate,
         title=("Critic value field under the policy's own action, by depth and task"
                + (f"  [{ds}]" if suffix else "")),
@@ -464,9 +568,10 @@ def _make_one(recs, out_dir, interpolate, suffix="") -> list:
         recs, out_dir, nm("fig2_topology"), "Does the value field follow the maze?",
         panels=[(["rho_geodesic", "rho_euclid"], "Spearman rho vs -distance", (-1, 1)),
                 (["topology_gain"], "topology_gain = rho_geo - rho_euclid", None)]))
-    if any("advantage" in r["z"] for r in recs):
+    if any("advantage" in r["z"] for r in one_per_depth):
         made.append(_field_figure(
-            recs, out_dir, key="advantage", name=nm("fig3_advantage_field"), cmap=CMAP_ADV,
+            one_per_depth, out_dir, key="advantage", name=nm("fig3_advantage_field"),
+            cmap=CMAP_ADV,
             diverging=True, interpolate=interpolate,
             title="Q(policy action) - Q(dataset action), by depth and task",
             sublabel=lambda m, r, i: f"mean {m['q_mean']:+.3f}"))
@@ -478,7 +583,7 @@ def _make_one(recs, out_dir, interpolate, suffix="") -> list:
             return None if ang is None else (np.isfinite(ang[ti]) & (ang[ti] >= split))
 
         made.append(_field_figure(
-            recs, out_dir, key="oracle_geo_minus_euclid",
+            one_per_depth, out_dir, key="oracle_geo_minus_euclid",
             name=nm("fig5_action_preference"), cmap=CMAP_ADV, diverging=True,
             interpolate=interpolate, mask_fn=_disagree,
             title=f"Q(maze-correct action) - Q(straight-at-goal action), on the bins "
@@ -491,7 +596,12 @@ def _make_one(recs, out_dir, interpolate, suffix="") -> list:
             "Does the critic prefer the maze-correct action?",
             {"action_topology_gain":
                  "prefers going around:  Q(geodesic) - Q(straight)",
-             "oracle_gap": "extraction:  Q(policy) - Q(geodesic)"}))
+             "oracle_gap":
+                 "extraction:  Q(policy) - Q(geodesic)",
+             "action_topology_gain_norm":
+                 "same, scale-free",
+             "oracle_gap_norm":
+                 "same, scale-free"}))
     made.append(_metric_lines(
         recs, out_dir, nm("fig4_metrics"), "Where the field peaks, and whether it climbs",
         panels=[(["peak_geodesic"], "distance of the peak bin to goal (units)", None),
