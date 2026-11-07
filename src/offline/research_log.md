@@ -858,7 +858,8 @@ distance, and look at per-block representational change. See `results/antmaze_st
 
 ### E5 — antmaze_ensemble1: is the depth result an artefact of the ensemble?  · 2026-11-06 (partial, job 2995193)
 **Scores (depth 4, final, n=3):** reeval@50 = **38.9 ± 11.3** · last3@1M = 28.0 ± 10.8 ·
-train best = 43.6 ± 10.1. Depth 32 at 38%, `best_success` ≥ 72.9 ± 5.1.
+train best = 43.6 ± 10.1. Depth 32, stopped at 755k steps: `best_success` 72.9 ± 5.1
+(n=3), reeval@50 **71.6** (n=1, seed 0 only — see below).
 **Question:** `humanoid_ensemble1` moved four things at once; this moves exactly one of
 them. Did `phase1_repro`'s depth result depend on having two critics?
 **Config:** identical to `phase1_repro` except `critic_ensemble: 2 → 1`, CRL only (GCBC
@@ -897,7 +898,11 @@ survived for all three seeds and was rescored at 50 episodes/task afterwards, so
 d32 cell has a comparable headline number — read as *best checkpoint of a run stopped
 at 755k steps*, not as a converged d32. (`reeval.py` gained a one-line change for this:
 the `summary.json` guard now applies only to a `--grid` sweep, not to an explicitly
-named `--run-dir`.)
+named `--run-dir`.) **That rescore was itself stopped after one seed**: seed 0 came back
+at 71.6 against the three-seed training-eval mean of 72.9, i.e. the 75 → 250 episode
+rescore moves the number by about a point, so seeds 1 and 2 would have confirmed rather
+than informed and the slot was wanted for E7's second pack. Checkpoints persist, so it
+can be completed whenever.
 
 **Write-up: [`results/antmaze_stitch__depth_ensemble1/README.md`](../../results/antmaze_stitch__depth_ensemble1/README.md).**
 

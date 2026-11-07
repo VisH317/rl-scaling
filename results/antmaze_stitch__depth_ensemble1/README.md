@@ -98,7 +98,24 @@ published table is measured (job `2995669`, `reeval_50ep.json` in this folder).
 | depth | n | mean | SD | seeds | status |
 |---|---|---|---|---|---|
 | 4 | 3 | 38.9 | 11.3 | 54.0, 26.8, 36.0 | final |
-| 32 | — | — | — | — | not finished; `reeval.py` skips runs with no `summary.json` |
+| 32 | 1 | 71.6 | — | 71.6 (seed 0 only) | **best checkpoint of a run stopped at 755k steps** |
+
+**On the depth-32 row.** The grid was cancelled at 38% of d32 (see §3). All three
+`params_best.pkl` survived, and seed 0 was rescored at 250 episodes afterwards: **71.6**,
+against the three-seed training-eval mean of 72.9 ± 5.1. The rescore moves the number by
+about a point, so seeds 1 and 2 were not scored — they would have confirmed rather than
+informed, and the GPUs were wanted for `humanoid_stitch1`. The checkpoints are on disk
+indefinitely, so this can be completed at any time:
+
+```bash
+for d in $SCRATCH/rl-scaling/experiments/runs/antmaze_ensemble1__crl__d32__*; do
+  python src/scripts/reeval.py --run-dir "$d" --episodes 50
+done
+```
+
+Against `phase1_repro` d32's **86.7 ± 2.9** this is −15.1 points — consistent with the
+matched-step `best_success` gap of −13.3, and the same conclusion: a large deficit at
+d32, nowhere near enough to remove the depth gain.
 
 **Against `phase1_repro` d4's 35.5 ± 9.4, this is +3.4 points — a third of a standard
 deviation.** On the one metric that is comparable to a published table, removing the

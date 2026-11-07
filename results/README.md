@@ -195,7 +195,10 @@ peak-then-drift that looked like a no-pessimism symptom turns out to be present 
 been flat-to-declining for 400k steps, so the remaining ~10 h bought confirmation, not
 a result. `params_best.pkl` survives for all three and was rescored at 50 episodes/task
 after the cancellation, so the d32 cell has a comparable headline number anyway — read
-it as *best checkpoint of a run stopped at 755k steps*, not as a converged d32.
+it as *best checkpoint of a run stopped at 755k steps*, not as a converged d32. Seed 0
+rescored at **71.6** against `phase1_repro` d32's 86.7; the rescore was stopped after
+that one seed, because it landed within a point of the three-seed training-eval mean
+(72.9) and the GPU was wanted for `humanoidmaze_stitch__depth`.
 
 ### `humanoidmaze_stitch__depth/` — the decisive cell · 8 runs · **queued** (`2995683`, `2995684`)
 *(grid `humanoid_stitch1`)* `humanoidmaze-medium-stitch-v0`, CRL, depths 4/8/16/32,
