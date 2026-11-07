@@ -122,6 +122,26 @@ OVERRIDABLE = ("critic_loss", "logits", "logsumexp_penalty", "critic_ensemble",
                "batch_size", "repr_dim", "alpha", "init", "discount",
                "actor_p_trajgoal", "actor_p_randomgoal")
 
+#: HOUSE POLICY, set 2026-11-06: every CRL grid trains the actor on a 50/50 mix of
+#: in-trajectory and out-of-trajectory goals, whatever OGBench publishes for the
+#: dataset.
+#:
+#: OGBench ties this split to the dataset TYPE -- 0.5/0.5 for every `-stitch` set,
+#: 1.0/0.0 for every `-navigate` set. That made it a confound rather than a control:
+#: of the six grids run to date, five were at 0.5/0.5 and only `humanoid_ensemble1`
+#: was at 1.0/0.0, and that is the grid where depth reversed. `p_randomgoal = 0` means
+#: the actor is never trained on an out-of-trajectory goal, which is the stitching
+#: capability itself -- so leaving it to follow the dataset means every cross-dataset
+#: comparison moves it for free.
+#:
+#: Precedence is profile -> published -> HOUSE -> explicit YAML key, so a grid that
+#: must reproduce a published setting still can, by naming the keys. The departure is
+#: recorded per run in `published_overrides` rather than hidden.
+#:
+#: CRL only: OGBench publishes `gcbc.py` with no flags, so GCBC keeps crl.py's 1.0/0.0
+#: defaults and is not ours to change.
+HOUSE_GOAL_SPLIT = dict(actor_p_trajgoal=0.5, actor_p_randomgoal=0.5)
+
 #: Knobs the config can express but NOTHING downstream reads. Setting one of these
 #: silently does nothing, which is worse than not offering it -- so `run.py` refuses
 #: to resolve rather than hand back a config that lies about what will run.
@@ -231,7 +251,10 @@ def _one(p: dict, seed: int, swept: list[str] = ()) -> dict:
     pub = (C.PUBLISHED_FLAGS.get((p["dataset"], agent_name), {})
            if p["use_published_flags"] else {})
     explicit = {k: p[k] for k in OVERRIDABLE if p.get(k) is not None}
-    merged = {**prof, **pub, **explicit}
+    # House policy sits BETWEEN the published command and the YAML: it overrides what
+    # OGBench published, and an explicit YAML key still overrides it. See HOUSE_GOAL_SPLIT.
+    house = dict(HOUSE_GOAL_SPLIT) if agent_name == "crl" else {}
+    merged = {**prof, **pub, **house, **explicit}
 
     # Build the defaults first, then overlay `merged` wholesale. Listing the keys to
     # copy by hand is how `discount: 0.995` -- OGBench's published value for
@@ -255,8 +278,13 @@ def _one(p: dict, seed: int, swept: list[str] = ()) -> dict:
             sys.exit(f"profile/published flag {k!r} has nowhere to go in the agent "
                      f"config; add it to the defaults in run.py._one")
         agent[k] = type(agent[k])(v) if not isinstance(v, str) else v
+    # A published flag that silently fails to land is the bug class that produced the
+    # actor_p_trajgoal error. Keys we deliberately override are exempt -- but they are
+    # recorded below rather than just dropped, so the deviation stays visible.
+    overridden = {k: v for k, v in pub.items()
+                  if k in house and agent.get(k) != v and k not in explicit}
     unapplied = {k: v for k, v in pub.items() if agent.get(k) != v
-                 and k not in explicit}
+                 and k not in explicit and k not in house}
     if unapplied:
         sys.exit(f"published flags {unapplied} did not reach the agent config -- "
                  f"this is the bug class that produced the actor_p_trajgoal error")
@@ -312,6 +340,13 @@ def _one(p: dict, seed: int, swept: list[str] = ()) -> dict:
     # finished work. Verified: with this ordering, phase1_repro.yaml and
     # phase1_anchor.yaml reproduce the run ids of the runs already on disk exactly.
     cfg["run_id"] = C._run_id(cfg)
+    # Provenance, attached AFTER the hash for the same reason `experiment_file` is:
+    # it records what this run departed from, and must not be part of its identity.
+    # (Adding it to the hashed dict re-keyed four grids on the first attempt, even
+    # where the value was empty -- the key's mere presence changes the digest.)
+    if overridden:
+        cfg["published_overrides"] = {k: dict(published=v, used=agent[k])
+                                      for k, v in overridden.items()}
     cfg["experiment_file"] = p.get("_source")
     return cfg
 

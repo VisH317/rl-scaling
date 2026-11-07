@@ -1034,6 +1034,32 @@ actor the same way. `actor_depth` is not in `SWEEPABLE`, and adding it needs a
 `VISIBLE_AXES` entry so `plot_results` does not silently average two actor depths into
 one point.
 
+### D-goal-split — house policy: 0.5/0.5 everywhere for CRL  · 2026-11-06
+**Decision:** every CRL grid trains the actor at `actor_p_trajgoal/randomgoal = 0.5/0.5`,
+overriding whatever OGBench publishes for the dataset. `run.py::HOUSE_GOAL_SPLIT`,
+applied between the published flags and the explicit YAML keys, so precedence is
+profile → published → house → YAML.
+**Why:** OGBench ties the split to the dataset TYPE — 0.5/0.5 for every `-stitch` set,
+1.0/0.0 for every `-navigate` set — which makes it a confound rather than a control.
+Read from all 50 runs' own `config.json`: five of six grids ran 0.5/0.5 and only
+`humanoid_ensemble1` ran 1.0/0.0, and that is the grid where depth reversed.
+`p_randomgoal = 0` means the actor is never trained on an out-of-trajectory goal — the
+stitching capability itself — so every cross-dataset comparison moved it for free.
+**What it does NOT change:** `value_p_trajgoal/randomgoal` is 1.0/0.0 in every run ever
+made. The CRITIC's goal distribution has never varied; only the actor's. Worth keeping
+straight when reading `interp__critic_depth`, which probes the critic.
+**GCBC is deliberately excluded.** OGBench publishes `gcbc.py` with no flags at all, and
+the GCBC arms exist to be published baselines; deviating would make them not baselines.
+They stay at 1.0/0.0. One line in `HOUSE_GOAL_SPLIT`'s guard if that should change.
+**Historical pin.** `experiments/humanoid_ensemble1.yaml` now names 1.0/0.0 explicitly
+with a "do not fix" comment. Its 8 runs are finished and written up, and the run id
+hashes the resolved config, so letting the new default reach it would orphan all 8.
+`./src/check.py` confirms 0 run directories orphaned.
+**Consequence for E8.** `extract_humanoid_navigate` now moves two things against its
+source — a shallower actor AND goal sampling the joint actor never saw. Recorded in
+that YAML: a null result there is clean (neither rescues the deep critic), a positive
+one needs a 1.0/0.0 arm to attribute.
+
 ---
 
 ## 6. Changelog

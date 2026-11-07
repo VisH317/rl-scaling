@@ -44,14 +44,14 @@
     "extract_antmaze_stitch__crl__d32__n1000000__s2__4a96fe22"
   ],
   "extract_humanoid_navigate": [
-    "extract_humanoid_navigate__crl__d4__n1000000__s0__924c5f8c",
-    "extract_humanoid_navigate__crl__d4__n1000000__s1__4d0b550a",
-    "extract_humanoid_navigate__crl__d8__n1000000__s0__aa8546ab",
-    "extract_humanoid_navigate__crl__d8__n1000000__s1__74f80dc9",
-    "extract_humanoid_navigate__crl__d16__n1000000__s0__2d61d106",
-    "extract_humanoid_navigate__crl__d16__n1000000__s1__87746ffa",
-    "extract_humanoid_navigate__crl__d32__n1000000__s0__c84b68f6",
-    "extract_humanoid_navigate__crl__d32__n1000000__s1__97c23b7f"
+    "extract_humanoid_navigate__crl__d4__n1000000__s0__9cc07ad4",
+    "extract_humanoid_navigate__crl__d4__n1000000__s1__98c182b5",
+    "extract_humanoid_navigate__crl__d8__n1000000__s0__89fd4ff6",
+    "extract_humanoid_navigate__crl__d8__n1000000__s1__5a4a01a6",
+    "extract_humanoid_navigate__crl__d16__n1000000__s0__72bd0875",
+    "extract_humanoid_navigate__crl__d16__n1000000__s1__3f747237",
+    "extract_humanoid_navigate__crl__d32__n1000000__s0__6c238f14",
+    "extract_humanoid_navigate__crl__d32__n1000000__s1__c808009d"
   ],
   "extract_humanoid_stitch": [
     "extract_humanoid_stitch__crl__d4__n2000000__s0__37349e6a",

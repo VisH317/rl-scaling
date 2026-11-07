@@ -42,3 +42,18 @@ step_cap: 2000000
 plateau_min_steps: 1000000
 eval_interval: 100000
 eval_episodes: 15
+
+# HISTORICAL PIN -- do not "fix" these to 0.5/0.5.
+#
+# As of 2026-11-06 the house default for every CRL grid is 0.5/0.5
+# (`run.py::HOUSE_GOAL_SPLIT`). This grid ran BEFORE that policy, at OGBench's
+# published 1.0/0.0 for humanoidmaze-medium-navigate, and its 8 runs are finished and
+# written up. The run id is a hash over this resolved config, so changing these two
+# lines re-keys all 8 and orphans them.
+#
+# They are also the grid's most interesting property: `p_randomgoal = 0` means the
+# actor was never trained on an out-of-trajectory goal -- the stitching capability
+# itself -- and this is the only grid of six that ran that way. It is also the only
+# one where depth reversed. `humanoid_stitch1` is the controlled comparison.
+actor_p_trajgoal: 1.0
+actor_p_randomgoal: 0.0

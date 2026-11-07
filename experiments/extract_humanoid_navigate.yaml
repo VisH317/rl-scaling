@@ -16,8 +16,23 @@
 #       -> a 4-layer policy on the d32 critic stays at ~53 and the held-out retrieval
 #          collapse (0.150 -> 0.094, interp__critic_depth 3.1) is the real story.
 #
-# critic_ensemble 1 to match `humanoid_ensemble1`. Published flags for this dataset
-# supply alpha 0.1, discount 0.995 and goal split 1.0/0.0, same as the source.
+# critic_ensemble 1 to match `humanoid_ensemble1`. Published flags supply alpha 0.1 and
+# discount 0.995, same as the source.
+#
+# THE GOAL SPLIT NO LONGER MATCHES THE SOURCE, and that is deliberate. House policy as
+# of 2026-11-06 is 0.5/0.5 for every CRL grid (`run.py::HOUSE_GOAL_SPLIT`), while
+# `humanoid_ensemble1` ran at OGBench's published 1.0/0.0. So this extraction moves TWO
+# things against its source: the actor is shallower AND it is trained on
+# out-of-trajectory goals the joint actor never saw.
+#
+# That is the right trade here, but it changes what a positive result means:
+#   d32 recovers  -> a shallow actor trained on random goals rescues the deep critic.
+#                    It does NOT say which of the two did it.
+#   d32 stays low -> clean and strong. Neither a shallower policy nor proper goal
+#                    sampling rescues it, so the deep CRITIC is the problem.
+# The negative is the informative direction; a positive needs a 1.0/0.0 arm to split.
+# Add one by appending `actor_p_trajgoal: 1.0` / `actor_p_randomgoal: 0.0`, which
+# overrides house policy, if that is the outcome.
 #
 #   python src/run.py experiments/extract_humanoid_navigate.yaml --submit
 name: extract_humanoid_navigate
