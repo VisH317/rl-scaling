@@ -1,0 +1,80 @@
+[
+  {
+    "run_id": "antmaze_ensemble1__crl__d4__n1000000__s0__c0321ced",
+    "grid": "antmaze_ensemble1",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 0,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.54,
+    "reeval_per_task": {
+      "task1": 0.44,
+      "task2": 0.68,
+      "task3": 0.64,
+      "task4": 0.1,
+      "task5": 0.84
+    },
+    "train_best_success": 0.5733333333333333,
+    "last3_eval_mean": 0.5111,
+    "last3_evals": [
+      0.5733,
+      0.48,
+      0.48
+    ],
+    "reeval_secs": 194.4
+  },
+  {
+    "run_id": "antmaze_ensemble1__crl__d4__n1000000__s1__726072c7",
+    "grid": "antmaze_ensemble1",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 1,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.268,
+    "reeval_per_task": {
+      "task1": 0.0,
+      "task2": 0.04,
+      "task3": 0.46,
+      "task4": 0.06,
+      "task5": 0.78
+    },
+    "train_best_success": 0.3333333333333333,
+    "last3_eval_mean": 0.32,
+    "last3_evals": [
+      0.3067,
+      0.3333,
+      0.32
+    ],
+    "reeval_secs": 230.5
+  },
+  {
+    "run_id": "antmaze_ensemble1__crl__d4__n1000000__s2__32b3b004",
+    "grid": "antmaze_ensemble1",
+    "agent": "crl",
+    "depth": 4,
+    "tower": "residual",
+    "seed": 2,
+    "checkpoint": "best",
+    "episodes_per_task": 50,
+    "reeval_success": 0.36,
+    "reeval_per_task": {
+      "task1": 0.0,
+      "task2": 0.28,
+      "task3": 0.64,
+      "task4": 0.0,
+      "task5": 0.88
+    },
+    "train_best_success": 0.4,
+    "last3_eval_mean": 0.3289,
+    "last3_evals": [
+      0.28,
+      0.3067,
+      0.4
+    ],
+    "reeval_secs": 208.6
+  }
+]

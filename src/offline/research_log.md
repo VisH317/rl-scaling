@@ -856,6 +856,70 @@ distance, and look at per-block representational change. See `results/antmaze_st
 
 **Full write-up with figures and tables: [`results/antmaze_stitch__depth/README.md`](../../results/antmaze_stitch__depth/README.md).**
 
+### E5 — antmaze_ensemble1: is the depth result an artefact of the ensemble?  · 2026-11-06 (partial, job 2995193)
+**Scores (depth 4, final, n=3):** reeval@50 = **38.9 ± 11.3** · last3@1M = 28.0 ± 10.8 ·
+train best = 43.6 ± 10.1. Depth 32 at 38%, `best_success` ≥ 72.9 ± 5.1.
+**Question:** `humanoid_ensemble1` moved four things at once; this moves exactly one of
+them. Did `phase1_repro`'s depth result depend on having two critics?
+**Config:** identical to `phase1_repro` except `critic_ensemble: 2 → 1`, CRL only (GCBC
+has no critic), depths {4, 32} only. Verified one-knob by diffing the two grids'
+*resolved* `config.json`, not the YAML — the lesson from E4.
+**Compute:** 6 runs on 2 A100s at 3 runs/GPU; d4 ~2 h, d32 ~17 h.
+**Result — no, the ensemble is not the cause.** Compared at a matched 735k gradient
+steps (the slowest in-flight d32 seed's position, because comparing its current best
+against `phase1_repro`'s *final* best would understate it):
+
+| | d4 | d32 | depth gain |
+|---|---|---|---|
+| `critic_ensemble: 2` | 39.1 ± 10.9 | 86.2 ± 2.5 | **+47.1** |
+| `critic_ensemble: 1` | 32.9 ± 12.0 | 72.9 ± 5.1 | **+40.0** |
+
++40 points of depth gain survives with no pessimism anywhere in the objective. The
+ensemble buys a ~13-point level shift at d32 and nothing at d4, where all three metrics
+disagree in sign and all sit inside the seed spread (+0.9, −6.1, +3.4).
+**Two things that did not go as predicted:**
+1. **Peak-then-drift is not a no-pessimism symptom.** The obvious story — without a
+   `min` over two critics the actor exploits the deep critic's errors and comes apart
+   — predicts the decay should appear here. It is present in *both* grids and
+   `phase1_repro` does it harder: −11.1 points peak→final at d32 against −7.1 here.
+   It is a property of deep antmaze runs at either ensemble size.
+2. **`categorical_accuracy` falls 0.369 → 0.320 at d4 while the contrastive loss is
+   identical to three significant figures**, train (0.00387) and validation (0.00530 vs
+   0.00535) alike. That is a measurement effect, not a worse representation: the metric
+   is computed on ensemble-reduced logits, so two critics at equal per-critic loss
+   retrieve better than one by cancelling independent logit noise.
+**Read:** one of E4's four confounds is closed. `phase1_repro`'s headline stands as
+written. Still open: dataset (E6), `actor_p_randomgoal` (§3 Q4), `discount`.
+**Next:** re-run `--reeval` and `plot_results` when d32 lands; §6 per-task is the
+interesting part, since the in-flight d32 already shows task 4 at 0.76 against d4's 0.08.
+
+**Write-up: [`results/antmaze_stitch__depth_ensemble1/README.md`](../../results/antmaze_stitch__depth_ensemble1/README.md).**
+
+### E6 — antmaze_navigate1: is the reversal about the data?  · 2026-11-06 (partial, jobs 2995262 / 2995263)
+**Scores (n=3 each):** d4 `best_success` **99.6 ± 0.6**, `last3@1M` 97.2 ± 1.7 ·
+d8 `best_success` 98.7 ± 1.1, `last3@1M` 96.9 ± 0.0. d16/d32 not started.
+**Question:** `humanoidmaze-medium-navigate` has 1000 trajectories × 2001 steps against
+antmaze-stitch's 5000 × 201. `antmaze-medium-navigate` is 1000 × 1001 — humanoid's
+data structure with the ant's 29-d observation. Is the reversal about few long
+trajectories rather than the body?
+**Config:** identical to `phase1_repro` except `dataset`. `actor_p_trajgoal/randomgoal`
+pinned to 0.5/0.5 in the YAML, because `use_published_flags` sets 1.0/0.0 for this
+dataset and would otherwise have made it a two-knob experiment.
+**Result so far — the grid cannot answer the question as posed.** Pack 1 finished and
+**navigate is solved at depth 4**: 99.6 against stitch d4's 42.7 on the same metric. All
+six runs stopped on the plateau rule at 1.0–1.4M steps. With d4 at the ceiling there is
+no headroom for depth to *help*, so "depth still scales → the data is not the cause" is
+not available here.
+**Read:** what remains is a **one-sided test for harm**, which still earns the d16/d32
+runs. If deep networks fall off the ceiling on ant + navigate data, that is the humanoid
+signature without the humanoid body, and the data structure is implicated. If they hold
+at ~99, this grid is uninformative and the dataset confound needs a harder variant
+(`antmaze-large-navigate`) instead.
+**Also worth recording on its own:** stitch d4 42.7 vs navigate d4 99.6 on identical
+agent, architecture, body and maze. The difference between the two OGBench subsets is
+larger than anything depth does in either grid.
+**Next:** `2995263` (d16, d32) is queued `afterany:2995193`, ~10 h out.
+
 ---
 
 ## 6. Changelog

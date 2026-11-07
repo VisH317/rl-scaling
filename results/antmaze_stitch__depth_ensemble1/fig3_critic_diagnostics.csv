@@ -1,0 +1,5 @@
+metric,depth,n_seeds,mean_at_1000000,std
+train/critic/categorical_accuracy,4,3,0.32031,0.00996
+train/critic/binary_accuracy,4,3,0.99908,1e-05
+train/critic/contrastive_loss,4,3,0.00387,9e-05
+val/critic/contrastive_loss,4,3,0.00535,5e-05

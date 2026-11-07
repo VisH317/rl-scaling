@@ -1,0 +1,3 @@
+agent,depth,n_seeds,mean_success,std,seeds,status
+crl,4,3,0.9956,0.0063,1.000;0.987;1.000,finished
+crl,8,3,0.9867,0.0109,1.000;0.987;0.973,finished

@@ -9,8 +9,8 @@ Compiled 2026-11-06.
 results/
   antmaze_stitch__baseline_arch/            6 runs   done     the reproduction control
   antmaze_stitch__depth/                   24 runs   done     depth helps              <- main result
-  antmaze_stitch__depth_ensemble1/          6 runs   RUNNING  is it the ensemble?
-  antmaze_navigate__depth/                 12 runs   RUNNING  is it the data?
+  antmaze_stitch__depth_ensemble1/          6 runs   3 DONE   is it the ensemble?      -> no
+  antmaze_navigate__depth/                 12 runs   6 DONE   is it the data?          -> d4 is at ceiling
   humanoidmaze_navigate__depth_ensemble1/   8 runs   done     depth hurts              <- the reversal
   interp__critic_depth/                    16 evals  done     what does the critic learn?
 ```
@@ -175,17 +175,44 @@ a miss means the harness is wrong rather than the idea.
 depth, on **both** environments. Asks what about `Q(s,a,g)` actually improves with
 depth. The answer is not "it becomes a better distance function".
 
-### `antmaze_stitch__depth_ensemble1/` — **running** (`2995193`) · 6 runs
+### [`antmaze_stitch__depth_ensemble1/`](antmaze_stitch__depth_ensemble1/) — the ensemble is cleared · 3 of 6 runs · **partial**
 *(grid `antmaze_ensemble1`)* `phase1_repro` with `critic_ensemble: 2 → 1` and nothing
-else, verified by a resolved-config diff. Tests whether the depth result depended on
-having two critics — the actor maximises `min` over the ensemble, so at size 1 there is
-no pessimism at all.
+else, verified by a resolved-config diff. The actor maximises `min` over the ensemble,
+so at size 1 there is no pessimism at all. **Depth 4 is final; depth 32 is 38% trained**
+(job `2995193`, ~10 h left) and every d32 number in that folder is marked a lower bound.
 
-### `antmaze_navigate__depth/` — **running** (`2995262`, `2995263`) · 12 runs · 136 GPU-h
+Provisional answer: **the ensemble is not what made depth pay.** At a matched 735k
+steps the depth gain is +40.0 points without pessimism against +47.1 with it, so what
+the ensemble buys is a ~13-point level shift at d32 and nothing at all at d4 — where
+all three metrics now agree it is a no-op: `reeval@50` 38.9 ± 11.3 against
+`phase1_repro`'s 35.5 ± 9.4, `best_success` 43.6 vs 42.7, `last3@1M` 28.0 vs 34.1.
+Three deltas inside the seed spread, not even consistent in sign. The late
+peak-then-drift that looked like a no-pessimism symptom turns out to be present in
+`phase1_repro` too, slightly harder (−11.1 vs −7.1 points).
+
+### [`antmaze_navigate__depth/`](antmaze_navigate__depth/) — d4/d8 done, and they are at ceiling · 6 of 12 runs · **partial**
 *(grid `antmaze_navigate1`)* `phase1_repro` with the dataset changed to
 `antmaze-medium-navigate-v0` and nothing else. Tests whether the reversal is about the
 **data** rather than the body: navigate has 1000 trajectories × 1001 steps against
 stitch's 5000 × 201, which is humanoid's structure with the ant's 29-d observation.
+
+**Pack 1 finished and it changes how this grid reads.** `antmaze-medium-navigate` is
+*solved at depth 4*:
+
+| metric | d4 (n=3) | d8 (n=3) | same metric, stitch d4 |
+|---|---|---|---|
+| `best_success` | 99.6 ± 0.6 | 98.7 ± 1.1 | 42.7 ± 11.4 |
+| `last3@1M` | 97.2 ± 1.7 | 96.9 ± 0.0 | 34.1 ± 9.8 |
+
+All six runs stopped on the plateau rule at 1.0–1.4M steps. With d4 at 99.6 there is no
+headroom left for depth to *help*, so the original reading (“depth still scales → the
+data is not the cause”) is no longer available on this grid. What remains is a
+**one-sided test for harm**, and that is still worth the d16/d32 runs: if deep networks
+fall below the ceiling on ant + navigate data, the humanoid reversal is about the data
+structure and the body is incidental. If they stay at ~99, the grid is uninformative
+and the dataset confound needs a harder navigate variant (`large`) instead.
+
+Pack 2 (d16, d32) is `2995263`, queued behind `2995193`.
 
 ---
 
@@ -195,8 +222,8 @@ stitch's 5000 × 201, which is humanoid's structure with the ant's 29-d observat
 
 | difference | | | covered by |
 |---|---|---|---|
-| dataset | stitch | navigate | `antmaze_navigate__depth` (not yet run) |
-| `critic_ensemble` | 2 | 1 | `antmaze_stitch__depth_ensemble1` (running) |
+| dataset | stitch | navigate | `antmaze_navigate__depth` (half done — d4/d8 in) |
+| `critic_ensemble` | 2 | 1 | `antmaze_stitch__depth_ensemble1` — **closed, not the cause** |
 | `actor_p_trajgoal / randomgoal` | 0.5 / 0.5 | 1.0 / 0.0 | **nothing yet** |
 | `discount` | 0.99 | 0.995 | **nothing yet** |
 

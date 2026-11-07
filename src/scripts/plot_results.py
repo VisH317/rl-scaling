@@ -24,6 +24,7 @@ import glob
 import json
 import os
 import sys
+import textwrap
 
 import matplotlib
 matplotlib.use("Agg")
@@ -100,9 +101,31 @@ def new_fig(w=7.2, h=4.6, ncols=1):
     return fig, axes[0]
 
 
+def _wrap_captions(fig):
+    """Keep a caption from setting the figure's width.
+
+    `bbox_inches="tight"` grows the canvas to fit anything wider than the axes. The
+    captions are single long strings, so on a one-panel grid (CRL with no GCBC) they
+    stretched the page to two panels' width and left the right half blank. Wrap them
+    to the figure's own width instead. Captions already broken by hand are left alone.
+    """
+    w_in = fig.get_size_inches()[0]
+    for t in fig.texts:
+        if t.get_position()[1] >= 0:        # titles sit above the axes; captions below
+            continue
+        s = t.get_text()
+        if "\n" in s:
+            continue
+        # ~0.55 em mean glyph advance for DejaVu Sans; 72 pt per inch.
+        ncols = max(40, int(w_in * 72 / (t.get_fontsize() * 0.55)))
+        if len(s) > ncols:
+            t.set_text("\n".join(textwrap.wrap(s, ncols)))
+
+
 def save(fig, out_dir, name, table_rows=None, table_header=None):
     os.makedirs(out_dir, exist_ok=True)
     png = os.path.join(out_dir, f"{name}.png")
+    _wrap_captions(fig)
     fig.savefig(png, dpi=160, bbox_inches="tight", facecolor=SURFACE)
     plt.close(fig)
     msg = f"  {png}"

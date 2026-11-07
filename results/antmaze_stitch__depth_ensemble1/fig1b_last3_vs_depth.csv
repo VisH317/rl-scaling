@@ -1,0 +1,2 @@
+agent,depth,n_seeds,last3_mean_at_1000000,std,seeds,n_excluded_not_yet_at_step
+crl,4,3,0.28,0.1082,0.391;0.133;0.316,0

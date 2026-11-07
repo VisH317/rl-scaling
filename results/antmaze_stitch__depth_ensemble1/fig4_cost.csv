@@ -1,0 +1,4 @@
+agent,depth,params,steps_per_s,wall_clock_h,peak_rss_gb
+crl,4,864648,178.4,3.12,1.6
+crl,4,864648,171.4,3.24,1.59
+crl,4,864648,161.6,2.75,1.59

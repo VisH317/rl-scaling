@@ -1,5 +1,0 @@
-depth,seed,run_id,select_score,rho_geodesic,rho_euclid,topology_gain,peak_geodesic,top5_geodesic,path_monotone,goal_percentile,coverage,q_std
-4,1,phase1_repro__crl__d4__n1000000__s1__acdde8ae,0.444,0.6473,0.6718,-0.0245,4.4,4.4572,0.6769,0.9832,0.6851,5.2013
-8,2,phase1_repro__crl__d8__n1000000__s2__43511f71,0.58,0.5423,0.539,0.0033,4.2,4.0858,0.6093,0.9719,0.6851,4.6593
-16,2,phase1_repro__crl__d16__n1000000__s2__c674fc85,0.904,0.4638,0.4764,-0.0127,5.8,4.2856,0.6488,0.981,0.6851,4.167
-32,2,phase1_repro__crl__d32__n1000000__s2__c92f51af,0.9067,0.393,0.3859,0.0071,5.0,4.043,0.6399,0.9839,0.6851,3.2248

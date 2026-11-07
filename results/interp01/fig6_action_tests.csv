@@ -1,4 +1,0 @@
-depth,seed,run_id,action_topology_gain,oracle_gap,split_bin_fraction,direction_split_deg
-4,1,phase1_repro__crl__d4__n1000000__s1__acdde8ae,-0.0727,0.4427,0.3993,45.0
-8,2,phase1_repro__crl__d8__n1000000__s2__43511f71,0.0209,0.1741,0.3993,45.0
-16,2,phase1_repro__crl__d16__n1000000__s2__c674fc85,0.0066,0.0356,0.3993,45.0

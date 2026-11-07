@@ -1,5 +1,0 @@
-depth,seed,run_id,select_score,rho_geodesic,rho_euclid,topology_gain,peak_geodesic,top5_geodesic,path_monotone,goal_percentile,coverage,q_std
-4,1,humanoid_ensemble1__crl__d4__n1000000__s1__1bce0b09,0.7467,0.6888,0.6294,0.0594,1.4,3.0764,0.656,0.9909,1.0,2.3657
-8,0,humanoid_ensemble1__crl__d8__n1000000__s0__a857e3c3,0.7067,0.6833,0.6687,0.0146,2.0,3.3142,0.5676,0.9894,1.0,2.3111
-16,1,humanoid_ensemble1__crl__d16__n1000000__s1__a7dcc884,0.68,0.7794,0.712,0.0674,1.2,3.476,0.6048,0.9909,1.0,2.5103
-32,0,humanoid_ensemble1__crl__d32__n1000000__s0__d1da46a4,0.6,0.724,0.7076,0.0164,1.2,3.0286,0.6109,0.9909,1.0,2.2261
