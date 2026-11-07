@@ -49,6 +49,7 @@ import time
 import numpy as np
 
 from offline.evals import common
+from offline.evals.critic_heatmap import geometry
 
 ACTION_SOURCES = ("policy", "oracle_geodesic", "oracle_euclid",
                   "dataset", "random")
@@ -367,6 +368,9 @@ def run(task: dict) -> dict:
     cross = cross_metrics(fields, geo, geodesic, count, min_states, tasks,
                           float(p.get("direction_split_deg", 45.0)))
     metrics["_cross"] = cross
+    _scale, _ = q_scale_per_task(fields, geodesic, count, min_states, tasks)
+    metrics["_geometry"] = geometry_probes(fields, geo, geodesic, count, min_states,
+                                           tasks, _scale)
 
     meta = dict(
         eval="critic_heatmap", run_id=run_cfg["run_id"], grid=run_cfg["grid"],
@@ -404,6 +408,11 @@ def run(task: dict) -> dict:
           f"oracle_gap={cross.get('oracle_gap', {}).get('mean')}"
           f"/{cross.get('oracle_gap_norm', {}).get('mean')}n  "
           f"q_scale={cross.get('q_scale', {}).get('mean')}  ({meta['secs']}s)")
+    _gp = metrics["_geometry"]
+    if _gp:
+        print("    geometry: " + "  ".join(
+            f"{k.replace('_accuracy', '').replace('_norm', '').replace('_rho', '')}"
+            f"={v['mean']}" for k, v in _gp.items() if k != "_field"))
     return dict(meta=meta, metrics=metrics)
 
 
@@ -452,6 +461,181 @@ def _normalised(summary: dict, scale) -> dict:
     finite = [v for v in per_task if v == v]
     return dict(mean=round(float(np.mean(finite)), 4) if finite else float("nan"),
                 per_task=per_task, n_tasks_scored=len(finite))
+
+
+# ---------------------------------------------------------------------------
+# Geometry probes -- small questions with known answers
+# ---------------------------------------------------------------------------
+
+def _cell_values(arr2d, count, subdiv, min_states):
+    """Fine-bin field -> {(i, j): mean over that cell's bins with enough data}."""
+    H, W = arr2d.shape[0] // subdiv, arr2d.shape[1] // subdiv
+    out = {}
+    for i in range(H):
+        for j in range(W):
+            sl = (slice(i * subdiv, (i + 1) * subdiv),
+                  slice(j * subdiv, (j + 1) * subdiv))
+            m = (count[sl] >= min_states) & np.isfinite(arr2d[sl])
+            if m.any():
+                out[(i, j)] = float(arr2d[sl][m].mean())
+    return out
+
+
+def _spearman(a, b):
+    from scipy.stats import rankdata
+    if len(a) < 3:
+        return float("nan")
+    ra, rb = rankdata(a), rankdata(b)
+    if ra.std() == 0 or rb.std() == 0:
+        return float("nan")
+    return float(np.corrcoef(ra, rb)[0, 1])
+
+
+def geometry_probes(fields, geo, geodesic, count, min_states, tasks, scale,
+                    field="q_policy"):
+    """Per-structure tests of the value field. See `geometry.py` for the structures.
+
+    Every score is scale-free: an accuracy in [0, 1] with chance at 0.5, a Spearman
+    rho in [-1, 1], or a Q margin already divided by that task's `q_scale`.
+
+    Scored per task and averaged, because each test depends on where the goal is.
+    A task contributing too few usable cells is skipped, not scored as 0.
+    """
+    arr = fields.get(field)
+    if arr is None:
+        return {}
+    maze = geo.maze
+    cat = geometry.catalogue(maze)
+    acc = {}
+
+    def push(name, value, n=1):
+        if value is not None and value == value:
+            acc.setdefault(name, []).append((float(value), int(n)))
+
+    for ti, tinfo in enumerate(tasks):
+        q = _cell_values(arr[ti], count, geo.subdiv, min_states)
+        gd = geometry.cell_geodesic(maze, tuple(tinfo["goal_ij"]))
+        sd = scale[ti] if scale is not None else float("nan")
+        have = lambda c: c in q and c in gd            # noqa: E731
+
+        # 1. LINE -- a straight corridor. Geodesic and obstacle-free distance agree
+        #    along it, so this is the easiest possible test; failing it is damning.
+        vals = []
+        for ln in cat["lines"]:
+            cs = [c for c in ln["cells"] if have(c)]
+            if len(cs) >= 3:
+                vals.append(_spearman([q[c] for c in cs], [-gd[c] for c in cs]))
+        vals = [v for v in vals if v == v]
+        if vals:
+            push("line_monotone_rho", float(np.mean(vals)), len(vals))
+
+        # 2. CORNER -- at an elbow, is the arm nearer the goal valued higher?
+        goal_ij = tuple(tinfo["goal_ij"])
+        # 2. CORNER -- an L. The elbow lies ON the path between its two arms, so the
+        #    three cells have a strict geodesic order and Q must reproduce it: the
+        #    value has to keep climbing AROUND the bend. This is the paired contrast
+        #    to `line_monotone_rho` -- same question, with a turn in the way -- and
+        #    the gap between the two is how much the corner itself costs.
+        #
+        #    (Restricting to elbows whose two ARMS disagree with the straight-line
+        #    heuristic was tried first and matched nothing at all on this maze: for
+        #    these five goals no elbow has arms the two metrics order differently.)
+        hit = tot = 0
+        for cn in cat["corners"]:
+            a, b = cn["arms"]
+            e = cn["cell"]
+            trio = [a, e, b]
+            if not all(have(c) for c in trio):
+                continue
+            g = [gd[c] for c in trio]
+            if len(set(g)) < 3:
+                continue
+            tot += 1
+            order_q = sorted(range(3), key=lambda k: -q[trio[k]])
+            order_g = sorted(range(3), key=lambda k: g[k])
+            hit += order_q == order_g
+        if tot:
+            push("corner_turn_accuracy", hit / tot, tot)
+
+        # 3. WALL PAIR -- "two sections". Cells a step or two apart on the floor but
+        #    a long walk apart. Sign accuracy, and the margin in units of Q's own SD.
+        hit = tot = 0
+        margins = []
+        for wp in cat["wall_pairs"]:
+            a, b = wp["a"], wp["b"]
+            if not (have(a) and have(b)) or gd[a] == gd[b]:
+                continue
+            fa = geometry.free_distance(a, goal_ij)
+            fb = geometry.free_distance(b, goal_ij)
+            if fa == fb or ((fa < fb) == (gd[a] < gd[b])):
+                continue
+            tot += 1
+            correct = (q[a] > q[b]) == (gd[a] < gd[b])
+            hit += correct
+            if sd == sd and sd > 1e-9:
+                signed = (q[a] - q[b]) * (1.0 if gd[a] < gd[b] else -1.0)
+                margins.append(signed / sd)
+        if tot:
+            push("wall_pair_accuracy", hit / tot, tot)
+        if margins:
+            push("wall_pair_margin_norm", float(np.mean(margins)), len(margins))
+
+        # 4. DEAD END -- walking in always increases distance to a goal outside it.
+        for de in cat["deadends"]:
+            cs = [c for c in de["chain"] if have(c)]
+            if len(cs) >= 3 and goal_ij not in de["chain"]:
+                r = _spearman([q[c] for c in cs], [-gd[c] for c in cs])
+                push("deadend_descent_rho", r, len(cs))
+
+        # 5. BOTTLENECK -- every path crosses one cell, so the far side should sit
+        #    below the near side by a clear margin. Strongest (most balanced) only.
+        if cat["bottlenecks"]:
+            bn = cat["bottlenecks"][0]
+            near, far = ((bn["side_a"], bn["side_b"]) if goal_ij in bn["side_a"]
+                         else (bn["side_b"], bn["side_a"]))
+            # Ordering WITHIN the far side. Everything there is reached through one
+            # cell, so true value is distance-to-bottleneck plus a constant, while
+            # straight-line distance to the goal is a different ordering entirely.
+            # (The near-minus-far mean margin was tried first and is NOT a test: the
+            # radial control scored higher than the ideal one, because the far side
+            # is usually euclid-far as well.)
+            fc = [c for c in far if c in q and c in gd]
+            if len(fc) >= 3:
+                push("bottleneck_far_rho",
+                     _spearman([q[c] for c in fc], [-gd[c] for c in fc]), len(fc))
+
+        # 6. DETOUR PAIR -- the headline. Pairs the obstacle-free heuristic gets
+        #    backwards. Ranking by geodesic is right, by free distance is wrong,
+        #    chance is 0.5.
+        hit = tot = 0
+        for dp in geometry.find_detour_pairs(maze, goal_ij):
+            a, b = dp["nearer_geo"], dp["farther_geo"]
+            if not (have(a) and have(b)):
+                continue
+            tot += 1
+            hit += q[a] > q[b]
+        if tot:
+            push("detour_pair_accuracy", hit / tot, tot)
+
+        # 7. ISO BAND -- cells the same distance from the goal should score alike.
+        #    Spread within a band, in units of Q's SD: lower means the field tracks
+        #    true distance rather than raw position.
+        bands = {}
+        for c, d in gd.items():
+            if c in q:
+                bands.setdefault(d, []).append(q[c])
+        wide = [np.std(v) for v in bands.values() if len(v) >= 3]
+        if wide and sd == sd and sd > 1e-9:
+            push("iso_band_spread_norm", float(np.mean(wide)) / sd, len(wide))
+
+    out = {}
+    for name, got in acc.items():
+        vals = [v for v, _ in got]
+        out[name] = dict(mean=round(float(np.mean(vals)), 4),
+                         per_task=[round(v, 4) for v in vals],
+                         n=[n for _, n in got])
+    out["_field"] = field
+    return out
 
 
 def cross_metrics(fields, geo, geodesic, count, min_states, tasks,
@@ -607,6 +791,57 @@ def _selftest() -> int:
     ok &= good
     print(f"  {'PASS' if good else 'FAIL'}  flat critic -> norm is NaN, not a number: "
           f"{got}")
+
+    # 7. GEOMETRY PROBES. The point of them is to separate a critic that encodes the
+    #    MAZE from one that encodes a radial bump around the goal. So the test is not
+    #    that each returns a plausible number -- it is that `ideal` (Q = -geodesic)
+    #    beats `radial` (Q = -euclid) on every single probe, in the right direction.
+    #    Run on the real medium maze, which backs both environments in the suite.
+    real = np.array([
+        [1, 1, 1, 1, 1, 1, 1, 1], [1, 0, 0, 1, 1, 0, 0, 1],
+        [1, 0, 0, 1, 0, 0, 0, 1], [1, 1, 0, 0, 0, 1, 1, 1],
+        [1, 0, 0, 1, 0, 0, 0, 1], [1, 0, 1, 0, 0, 1, 0, 1],
+        [1, 0, 0, 0, 1, 0, 0, 1], [1, 1, 1, 1, 1, 1, 1, 1]])
+
+    class _RealEnv:
+        class unwrapped:
+            maze_map = real
+            _maze_unit, _offset_x, _offset_y = 4.0, 4.0, 4.0
+            _goal_tol, _noise, _add_noise_to_goal = 0.5, 1.0, True
+            task_infos = [dict(init_ij=(1, 1), goal_ij=(6, 5),
+                               init_xy=(0.0, 0.0), goal_xy=(16.0, 20.0)),
+                          dict(init_ij=(6, 1), goal_ij=(1, 6),
+                               init_xy=(0.0, 20.0), goal_xy=(20.0, 0.0))]
+
+    rgeo = common.MazeGeometry(_RealEnv(), subdiv=4)
+    rtasks = rgeo.tasks
+    rgd = np.stack([rgeo.geodesic(t["goal_xy"]) for t in rtasks])
+    red = np.stack([rgeo.euclid(t["goal_xy"]) for t in rtasks])
+    rcount = np.where(np.isfinite(rgd[0]), 99, 0)
+
+    def _probe(qf):
+        qf = np.where(np.isfinite(rgd), qf, np.nan)
+        sc, _ = q_scale_per_task({"q_policy": qf}, rgd, rcount, 1, rtasks)
+        return geometry_probes({"q_policy": qf}, rgeo, rgd, rcount, 1, rtasks, sc)
+
+    ideal, radial = _probe(-rgd), _probe(-red)
+    #: True when a LOWER score is the better critic.
+    lower_better = {"iso_band_spread_norm"}
+    expected = {"line_monotone_rho", "corner_turn_accuracy", "wall_pair_accuracy",
+                "wall_pair_margin_norm", "bottleneck_far_rho",
+                "detour_pair_accuracy", "iso_band_spread_norm",
+                "deadend_descent_rho"}
+    got = {k for k in ideal if k != "_field"}
+    check("geometry probes reported", float(got == expected), 1.0)
+    if got != expected:
+        print(f"        missing {sorted(expected - got)} extra {sorted(got - expected)}")
+    for k in sorted(got & expected):
+        i, r = ideal[k]["mean"], radial[k]["mean"]
+        better = (i < r) if k in lower_better else (i > r)
+        ok &= better
+        print(f"  {'PASS' if better else 'FAIL'}  probe {k}: "
+              f"ideal {i:+.3f} vs radial {r:+.3f} "
+              f"({'lower' if k in lower_better else 'higher'} is better)")
 
     print("\n" + ("critic_heatmap metrics: ALL PASS" if ok else "SELF-CHECK FAILED"))
     return 0 if ok else 1

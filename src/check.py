@@ -118,6 +118,7 @@ SELFTESTS = [
     ("frozen-critic extraction self-test", ["-m", "offline.extract"]),
     ("critic_heatmap metrics self-test",
      ["-m", "offline.evals.critic_heatmap.impl"]),
+    ("maze geometry self-test", ["-m", "offline.evals.critic_heatmap.geometry"]),
 ]
 
 

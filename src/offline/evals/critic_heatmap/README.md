@@ -259,6 +259,75 @@ The self-check asserts the defining property directly: multiplying every Q field
 multiplies `q_scale` and the raw metrics by 37.0 and leaves the `_norm` values
 unchanged to 4 decimal places.
 
+### Geometry probes — simple structures with known answers
+
+`metrics["_geometry"]`, drawn by `fig7_geometry_probes`, found by
+`geometry.py::catalogue`.
+
+The aggregate metrics above score the whole field at once, and a single correlation
+hides *which* geometry a critic gets right. A critic can post a respectable
+`rho_geodesic` by being roughly radial around the goal while being wrong about every
+wall, because most cell pairs are not separated by one. These probes ask small local
+questions instead, so a failure points at a geometry rather than at a number.
+
+**The foil is obstacle-free distance under the same 4-connectivity (Manhattan), not
+Euclidean.** On this grid the geodesic equals Manhattan wherever no wall intervenes, so
+comparing them isolates the effect of *walls* exactly: in an open room the probes
+correctly find nothing to measure. Against a Euclidean foil an empty room yields
+spurious "detours" that are pure L1-vs-L2 artefact. (Note that the suite's older
+`topology_gain = rho_geo − rho_euclid` does use a Euclidean foil and carries that
+wrinkle; it is unchanged, and the two are not measuring quite the same thing.)
+
+| probe | structure | question | chance |
+|---|---|---|---|
+| `line_monotone_rho` | a straight run of ≥3 free cells | is Q ordered along it? geodesic and free distance agree here, so this is the easiest possible test | 0.0 |
+| `corner_turn_accuracy` | an elbow: a cell whose only two free neighbours are perpendicular | does Q keep climbing *around* the bend? ordering of (arm, elbow, arm) must match geodesic | — |
+| `wall_pair_accuracy` | two cells close on the floor, far by path | is the one nearer the goal valued higher? | 0.5 |
+| `wall_pair_margin_norm` | the same pairs | *how much* higher, in units of the run's Q SD | 0.0 |
+| `detour_pair_accuracy` | any pair the free-space heuristic orders backwards | does Q rank by path or by line? **the headline probe** | 0.5 |
+| `bottleneck_far_rho` | an articulation cell: removing it splits the maze | is the far side — all reached through one cell — ordered correctly? | 0.0 |
+| `deadend_descent_rho` | a cul-de-sac and its chain | does Q fall as you walk in? | 0.0 |
+| `iso_band_spread_norm` | cells at equal geodesic distance | do they score alike? spread / Q SD, **lower is better** | — |
+
+Every score is dimensionless — an accuracy, a Spearman ρ, or a margin already divided
+by `q_scale` — so depths, seeds and the two environments are directly comparable.
+Scored per task and averaged, since each depends on where the goal is.
+
+**These probes are validated, not just implemented.** The self-check runs them on the
+real medium maze against two synthetic critics — `ideal` (Q = −geodesic) and `radial`
+(Q = −euclid) — and asserts that ideal beats radial on **all eight**:
+
+| probe | ideal | radial | noise |
+|---|---|---|---|
+| `line_monotone_rho` | 0.990 | 0.539 | 0.270 |
+| `corner_turn_accuracy` | 1.000 | 0.606 | 0.122 |
+| `wall_pair_accuracy` | 0.771 | **0.125** | 0.583 |
+| `wall_pair_margin_norm` | +0.138 | **−0.623** | 0.122 |
+| `detour_pair_accuracy` | 0.950 | **0.256** | 0.665 |
+| `bottleneck_far_rho` | 0.989 | 0.759 | −0.182 |
+| `deadend_descent_rho` | 1.000 | 0.771 | 0.371 |
+| `iso_band_spread_norm` ↓ | 0.137 | 0.469 | 0.248 |
+
+Two probes were rebuilt because their first versions *failed* this test, which is the
+reason it exists: `corner_arm_accuracy` (comparing the two arms) scored 0.96 for the
+radial control — no test at all — and a `bottleneck_margin_norm` comparing near-side
+to far-side means scored *higher* for radial than for ideal, because the far side is
+usually straight-line-far as well.
+
+The maze itself, for reference — the same 8×8 map backs antmaze-medium and
+humanoidmaze-medium, so every structure is shared and the scores compare directly:
+
+```
+##############        26 free cells
+##. . ####. .##        8 straight runs (longest 4)
+##. . ##. . .##       15 elbows
+####. . .######       39 wall pairs (strongest: (6,3)<->(6,5), 2 apart, 8 by path)
+##. . ##. . .##        1 dead end, chain of 6
+##. ##. .##. ##       10 articulation cells
+##. . .##. .##
+##############
+```
+
 ### The same metrics on the other fields
 
 Every metric is computed for `q_policy`, `q_dataset`, `advantage`, the ensemble-mean
@@ -333,6 +402,7 @@ the goal draws — a large value says the bin's single number is hiding structur
 | `fig4_metrics` | `peak_geodesic` / `path_monotone` / `goal_percentile` vs depth |
 | `fig5_action_preference` | `Q[geodesic] − Q[straight]`, diverging, **only on the disagreeing bins** — the others are drawn pale, because the question does not apply there, which is a different thing from having no data (hatched) |
 | `fig6_action_tests` | `action_topology_gain` and `oracle_gap` vs depth, raw (top row, logits) and scale-free (bottom row), mean ± 1 SD over seeds |
+| `fig7_geometry_probes` | the eight structural probes vs depth, one panel each |
 | `fig3_advantage_field` | only if `dataset` is in `action_sources` |
 
 ## How to read it

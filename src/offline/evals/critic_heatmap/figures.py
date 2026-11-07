@@ -541,6 +541,76 @@ def make_figures(suite_dir: str, out_dir: str = None, interpolate: bool = False)
     return made
 
 
+# ---------------------------------------------------------------------------
+# Figure 7 -- the geometry probes
+# ---------------------------------------------------------------------------
+
+#: (key, short label, chance level or None, lower_is_better)
+GEOMETRY_PANELS = (
+    ("line_monotone_rho", "line: Q ordered along a straight run", 0.0, False),
+    ("corner_turn_accuracy", "L: Q ordered around the elbow", None, False),
+    ("wall_pair_accuracy", "two sections: right side valued higher", 0.5, False),
+    ("wall_pair_margin_norm", "two sections: margin / Q SD", 0.0, False),
+    ("detour_pair_accuracy", "detour: ranks by path, not by line", 0.5, False),
+    ("bottleneck_far_rho", "behind a cut: far side ordered", 0.0, False),
+    ("deadend_descent_rho", "dead end: Q falls going in", 0.0, False),
+    ("iso_band_spread_norm", "equal distance -> equal Q (LOWER better)", None, True),
+)
+
+
+def fig_geometry_probes(recs, out_dir, name, title):
+    """One panel per structure. Every score is already dimensionless."""
+    recs = [r for r in recs if r["metrics"].get("_geometry")]
+    if not recs:
+        return None
+    depths = sorted({r["meta"]["depth"] for r in recs})
+    n_seeds = _n_seeds(recs)
+    panels = [p for p in GEOMETRY_PANELS
+              if any(p[0] in r["metrics"]["_geometry"] for r in recs)]
+    ncol = 4
+    nrow = -(-len(panels) // ncol)
+    fig, axes = plt.subplots(nrow, ncol, figsize=(3.6 * ncol, 3.1 * nrow),
+                             facecolor=P.SURFACE, squeeze=False)
+    flat = [a for row in axes for a in row]
+    for a in flat[len(panels):]:
+        a.set_visible(False)
+    rows = []
+    for pi, (key, label, chance, lower) in enumerate(panels):
+        ax = flat[pi]
+        _seed_series(ax, recs,
+                     lambda r, _k=key: r["metrics"]["_geometry"].get(_k, {}).get("mean"),
+                     P.SERIES["crl"])
+        if chance is not None:
+            ax.axhline(chance, color=P.AXIS, lw=1.0, ls=(0, (4, 3)), zorder=1)
+        ax.set_title(label, color=P.INK, fontsize=9, loc="left")
+        P.style_axes(ax, xlabel="depth" if pi >= len(panels) - ncol else "",
+                     ylabel="score" if pi % ncol == 0 else "")
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(depths)
+        ax.set_xticklabels([str(d) for d in depths])
+        ax.margins(x=0.18)
+    for r in recs:
+        g = r["metrics"]["_geometry"]
+        rows.append([r["meta"]["depth"], r["meta"]["seed"], r["meta"]["run_id"]]
+                    + [g.get(k, {}).get("mean") for k, _, _, _ in GEOMETRY_PANELS])
+    fig.suptitle(title, color=P.INK, fontsize=13, x=0.012, ha="left")
+    fig.text(0.012, -0.02,
+             "Each panel is one structure found in the maze itself, asked a question "
+             "with a known answer. Dashed line is chance where one exists. Every "
+             "score is dimensionless -- an accuracy, a Spearman rho, or a Q margin "
+             "divided by that run's Q SD -- so depths, seeds and environments are "
+             "directly comparable. On synthetic controls over this same maze, a "
+             "critic encoding true path distance beats one encoding straight-line "
+             "distance on all eight; the self-check asserts it. "
+             f"Mean over {n_seeds} seed(s), bars 1 SD, dots the seeds.",
+             color=P.MUTED, fontsize=8, ha="left", va="top")
+    fig.tight_layout()
+    P.save(fig, out_dir, name, table_rows=rows,
+           table_header=["depth", "seed", "run_id"]
+           + [k for k, _, _, _ in GEOMETRY_PANELS])
+    return os.path.join(out_dir, f"{name}.png")
+
+
 def _make_one(recs, out_dir, interpolate, suffix="") -> list:
     def nm(base):
         return base + suffix
@@ -602,6 +672,9 @@ def _make_one(recs, out_dir, interpolate, suffix="") -> list:
                  "same, scale-free",
              "oracle_gap_norm":
                  "same, scale-free"}))
+    made.append(fig_geometry_probes(
+        recs, out_dir, nm("fig7_geometry_probes"),
+        "Simple structures: what geometry does the critic actually get right?"))
     made.append(_metric_lines(
         recs, out_dir, nm("fig4_metrics"), "Where the field peaks, and whether it climbs",
         panels=[(["peak_geodesic"], "distance of the peak bin to goal (units)", None),

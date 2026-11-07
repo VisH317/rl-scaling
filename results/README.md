@@ -294,6 +294,27 @@ published command for whichever dataset is named.
 | `state_probes` at `block_k` | per-block representational change; needs activation capture | — |
 | `q1_loss_pilot`, `scaling_crl_replication` | **deprioritised** — the paper's contribution is the architecture, and its energy function is believed to be a dot product, so the loss-form difference may not be a real deviation | — |
 
+### Backlog — a skill inventory: what does depth actually buy?
+
+**Not built, deliberately parked 2026-11-06.** Everything measured so far is either an
+aggregate success rate or a property of the value field. Neither says what the *policy*
+can newly do at depth 32 that it could not at depth 4. Task 4 going 0.08 → 0.97 is the
+closest thing, and it is one bit from five tasks.
+
+The shape it should take, when it is wanted: a fixed battery of named, scorable
+behaviours — leave a dead end, take a corridor without wall-scraping, turn a blind
+corner, cross a bottleneck, recover after being pushed off the path, reach a goal whose
+straight-line direction is wrong — each scored from rollouts on *every* depth, so the
+output is a depth × skill matrix rather than one number. The `fig7_geometry_probes`
+structures are the natural index: they already name the geometries and they are shared
+by both environments, so a skill can be defined on the same elbow or bottleneck that
+the critic probe scores. That pairing is the real prize — **critic probe says the value
+function knows the corner, skill score says the policy can turn it**, and a gap between
+them localises the failure to extraction.
+
+Needs rollout instrumentation that does not exist yet (per-episode traces tagged by
+which structure they pass through), so it is a day of work, not an afternoon.
+
 ### Backlog — `actor_p_randomgoal` on humanoidmaze
 
 > **Superseded in part, 2026-11-06.** `humanoidmaze_stitch__depth` runs the humanoid
