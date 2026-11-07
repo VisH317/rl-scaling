@@ -31,6 +31,16 @@
     "humanoid_ensemble1__crl__d32__n1000000__s0__d1da46a4",
     "humanoid_ensemble1__crl__d32__n1000000__s1__9ca3fb59"
   ],
+  "humanoid_stitch1": [
+    "humanoid_stitch1__crl__d4__n2000000__s0__34ecc9b8",
+    "humanoid_stitch1__crl__d4__n2000000__s1__a45eb4de",
+    "humanoid_stitch1__crl__d8__n2000000__s0__ccb77a48",
+    "humanoid_stitch1__crl__d8__n2000000__s1__b37b47ee",
+    "humanoid_stitch1__crl__d16__n2000000__s0__98cc6d15",
+    "humanoid_stitch1__crl__d16__n2000000__s1__a583a522",
+    "humanoid_stitch1__crl__d32__n2000000__s0__1310f1eb",
+    "humanoid_stitch1__crl__d32__n2000000__s1__783b79a6"
+  ],
   "phase1_anchor": [
     "phase1_anchor__crl__d4__n1000000__s0__e2b4cdd4",
     "phase1_anchor__crl__d4__n1000000__s1__717fe2b1",

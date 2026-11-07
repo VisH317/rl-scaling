@@ -1,0 +1,70 @@
+# Is the humanoid reversal about the BODY, or about the DATA?  (the decisive cell)
+#
+# `humanoid_ensemble1` found depth HURTING where `phase1_repro` found it helping, but
+# those grids differ four ways, so the reversal was never attributable to anything.
+# Two of the four are now closed or spent:
+#
+#   critic_ensemble 2 -> 1   CLOSED by `antmaze_ensemble1`: at a matched 735k steps the
+#                            depth gain is +40.0 without pessimism against +47.1 with
+#                            it. Not the cause.
+#   dataset (ant side)       SPENT. `antmaze_navigate1` put navigate data under the ant
+#                            and d4 came out at 99.6 -- no headroom, so that grid can
+#                            never show depth helping. Cancelled at d4/d8.
+#
+# This file attacks the same question from the humanoid side instead, where there is
+# plenty of headroom (humanoid d4 = 62.0, d32 = 53.0). It is the missing fourth cell:
+#
+#                              trajs x len     ob   p_traj/p_random   discount   depth
+#   antmaze-medium-stitch       5000 x  201    29      0.5 / 0.5        0.99     HELPS
+#   antmaze-medium-navigate     1000 x 1001    29      1.0 / 0.0        0.99     ceiling
+#   humanoidmaze-med-navigate   1000 x 2001    69      1.0 / 0.0        0.995    HURTS
+#   humanoidmaze-med-stitch     5000 x  401    69      0.5 / 0.5        0.995    <- this
+#
+# WHY THIS CELL IS WORTH MORE THAN THE ANT ONE. OGBench ties the goal-sampling split to
+# the dataset TYPE, not the body: it publishes 0.5/0.5 for both -stitch sets and 1.0/0.0
+# for both -navigate sets (hyperparameters.sh L166, L296 vs L257). So this single grid
+# moves the dataset AND the goal split together -- which are the two remaining
+# uncovered confounds -- and leaves body, discount and ensemble fixed against
+# `humanoid_ensemble1`. One run instead of two, and it also absorbs the Q4 backlog,
+# since it is the first humanoid grid that ever trains the actor on random goals.
+#
+# ONE KNOB per comparison, which is the point:
+#   vs `humanoid_ensemble1`   dataset + its published goal split. Same body, same
+#                             discount 0.995, same critic_ensemble 1.
+#   vs `phase1_repro`         body + discount. Same dataset TYPE, same goal split
+#                             0.5/0.5, and critic_ensemble is now known not to matter.
+#
+# Published flags are applied, NOT hand-set: alpha 0.1, discount 0.995,
+# actor_p_trajgoal/randomgoal 0.5/0.5 all come from `use_published_flags` reading
+# OGBench's own command for this dataset. Do not pin them here -- the whole value of
+# this cell is that OGBench's published setting already supplies the split we want.
+#
+# READ IT AS:
+#   depth HELPS here (d32 >> d4)  -> the humanoid BODY is cleared. The reversal is
+#                                    about -navigate data: few long trajectories, and
+#                                    an actor never trained on out-of-trajectory goals.
+#                                    This is the interesting outcome.
+#   depth still HURTS             -> the body is implicated after all, and the next
+#                                    question is what about a 69-d observation and a
+#                                    21-d action breaks contrastive depth scaling.
+#   task 4 becomes non-zero       -> independently settles Q4: humanoid task 4 never
+#                                    exceeded 0.26 at any depth, and this is the first
+#                                    time its actor sees random goals.
+#
+# Reference points, CRL at reeval@50:
+#   phase1_repro        d4 35.5 +/- 9.4   d32 86.7 +/- 2.9   (depth helps)
+#   humanoid_ensemble1  d4 62.0 +/- 1.2   d32 53.0 +/- 7.0   (depth hurts, peak at d8)
+#
+#   python src/scripts/estimate_runtime.py experiments/humanoid_stitch1.yaml --verbose
+#   python src/run.py experiments/humanoid_stitch1.yaml --submit
+name: humanoid_stitch1
+dataset: humanoidmaze-medium-stitch-v0
+seeds: [0, 1]                  # matches humanoid_ensemble1, the grid it is read against
+agent: [crl]
+depth: [4, 8, 16, 32]          # full ladder: humanoid peaked at d8, so endpoints would lie
+profile: ogbench               # binary_nce + dot + no penalty
+critic_ensemble: 1             # matches humanoid_ensemble1
+repr_dim: 64
+tower: residual
+width: 256
+step_cap: 2000000

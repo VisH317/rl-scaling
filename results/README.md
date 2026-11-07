@@ -9,8 +9,9 @@ Compiled 2026-11-06.
 results/
   antmaze_stitch__baseline_arch/            6 runs   done     the reproduction control
   antmaze_stitch__depth/                   24 runs   done     depth helps              <- main result
-  antmaze_stitch__depth_ensemble1/          6 runs   3 DONE   is it the ensemble?      -> no
-  antmaze_navigate__depth/                 12 runs   6 DONE   is it the data?          -> d4 is at ceiling
+  antmaze_stitch__depth_ensemble1/          6 runs   STOPPED  is it the ensemble?         -> no
+  antmaze_navigate__depth/                 12 runs   STOPPED  is it the data? (ant side)  -> ceiling, spent
+  humanoidmaze_stitch__depth/               8 runs   QUEUED   is it the data? (humanoid side)
   humanoidmaze_navigate__depth_ensemble1/   8 runs   done     depth hurts              <- the reversal
   interp__critic_depth/                    16 evals  done     what does the critic learn?
 ```
@@ -190,6 +191,38 @@ Three deltas inside the seed spread, not even consistent in sign. The late
 peak-then-drift that looked like a no-pessimism symptom turns out to be present in
 `phase1_repro` too, slightly harder (−11.1 vs −7.1 points).
 
+**Stopped on 2026-11-06 at 38% of d32.** The three d32 seeds peaked at 300–400k and had
+been flat-to-declining for 400k steps, so the remaining ~10 h bought confirmation, not
+a result. `params_best.pkl` survives for all three and was rescored at 50 episodes/task
+after the cancellation, so the d32 cell has a comparable headline number anyway — read
+it as *best checkpoint of a run stopped at 755k steps*, not as a converged d32.
+
+### `humanoidmaze_stitch__depth/` — the decisive cell · 8 runs · **queued** (`2995683`, `2995684`)
+*(grid `humanoid_stitch1`)* `humanoidmaze-medium-stitch-v0`, CRL, depths 4/8/16/32,
+2 seeds, `critic_ensemble: 1`, OGBench's published flags for this dataset
+(alpha 0.1, discount 0.995, goal split 0.5/0.5). 71 GPU-h, ~12 h wall.
+
+The missing fourth cell of the body × data square, and the only one with headroom in
+both directions:
+
+| | trajs × len | ob | goal split | discount | depth does |
+|---|---|---|---|---|---|
+| `antmaze-medium-stitch` | 5000 × 201 | 29 | 0.5 / 0.5 | 0.99 | **helps** 35.5 → 86.7 |
+| `antmaze-medium-navigate` | 1000 × 1001 | 29 | 1.0 / 0.0 | 0.99 | ceiling at d4 (99.6) |
+| `humanoidmaze-medium-navigate` | 1000 × 2001 | 69 | 1.0 / 0.0 | 0.995 | **hurts** 62.0 → 53.0 |
+| **`humanoidmaze-medium-stitch`** | **5000 × 401** | **69** | **0.5 / 0.5** | **0.995** | **?** |
+
+Read it as: **depth helps** → the humanoid body is cleared and the reversal is about
+`-navigate` data — few long trajectories, and an actor never trained on
+out-of-trajectory goals. **Depth still hurts** → the body is implicated, and the next
+question is what about a 69-d observation and a 21-d action breaks contrastive depth
+scaling. Either way, **task 4** settles the Q4 backlog on its own: it never exceeded
+0.26 on humanoid at any depth, and this is the first humanoid grid whose actor ever
+sees a random goal.
+
+Dataset verified against its own npz before submission: 5000 × 401, ob 69, act 21,
+2,005,000 rows (`VERIFIED_DATASETS`).
+
 ### [`antmaze_navigate__depth/`](antmaze_navigate__depth/) — d4/d8 done, and they are at ceiling · 6 of 12 runs · **partial**
 *(grid `antmaze_navigate1`)* `phase1_repro` with the dataset changed to
 `antmaze-medium-navigate-v0` and nothing else. Tests whether the reversal is about the
@@ -212,7 +245,11 @@ fall below the ceiling on ant + navigate data, the humanoid reversal is about th
 structure and the body is incidental. If they stay at ~99, the grid is uninformative
 and the dataset confound needs a harder navigate variant (`large`) instead.
 
-Pack 2 (d16, d32) is `2995263`, queued behind `2995193`.
+**Stopped on 2026-11-06 before pack 2 ran.** `2995263` (d16, d32) was cancelled rather
+than spending 70 GPU-h on a one-sided test, in favour of attacking the same question
+from the humanoid side, where there is headroom in both directions
+(`humanoidmaze_stitch__depth`). d4 and d8 stand as a finished result; the grid is
+closed at 6 of 12 runs by choice.
 
 ---
 
@@ -222,10 +259,19 @@ Pack 2 (d16, d32) is `2995263`, queued behind `2995193`.
 
 | difference | | | covered by |
 |---|---|---|---|
-| dataset | stitch | navigate | `antmaze_navigate__depth` (half done — d4/d8 in) |
+| dataset | stitch | navigate | `humanoidmaze_stitch__depth` (queued) |
 | `critic_ensemble` | 2 | 1 | `antmaze_stitch__depth_ensemble1` — **closed, not the cause** |
-| `actor_p_trajgoal / randomgoal` | 0.5 / 0.5 | 1.0 / 0.0 | **nothing yet** |
+| `actor_p_trajgoal / randomgoal` | 0.5 / 0.5 | 1.0 / 0.0 | `humanoidmaze_stitch__depth` (queued) |
 | `discount` | 0.99 | 0.995 | **nothing yet** |
+
+**Why one grid now covers two rows.** OGBench ties the goal split to the dataset
+*type*, not the body: it publishes `0.5 / 0.5` for both `-stitch` sets and `1.0 / 0.0`
+for both `-navigate` sets (`hyperparameters.sh` L166 and L296 against L257). So
+`humanoidmaze-medium-stitch` moves the dataset and the goal split **together** — a
+weaker isolation than two separate runs, but it covers the two remaining live confounds
+in 8 runs and holds body, `discount` and `critic_ensemble` fixed against
+`humanoid_ensemble1`. `discount` stays uncovered because OGBench ties *it* to the body
+instead: 0.99 for every antmaze set, 0.995 for every humanoidmaze set.
 
 The third was found late and may matter most: `p_randomgoal = 0` means the actor is
 **never trained on out-of-trajectory goals**, which is exactly the stitching capability
@@ -246,6 +292,14 @@ published command for whichever dataset is named.
 | `q1_loss_pilot`, `scaling_crl_replication` | **deprioritised** — the paper's contribution is the architecture, and its energy function is believed to be a dot product, so the loss-form difference may not be a real deviation | — |
 
 ### Backlog — `actor_p_randomgoal` on humanoidmaze
+
+> **Superseded in part, 2026-11-06.** `humanoidmaze_stitch__depth` runs the humanoid
+> body at `0.5 / 0.5` for the first time, so it answers the behavioural half of this
+> question — does task 4 become non-zero once the actor sees random goals — without a
+> dedicated grid. What it does *not* do is isolate the goal split from the dataset,
+> because OGBench moves both together. Keep the 4-run design below for the case where
+> `humanoidmaze_stitch__depth` comes back positive and the split has to be separated
+> from the trajectory structure.
 
 **Deliberately deferred, not forgotten.** The fourth confound (§ above) is the only one
 with no experiment: `humanoid_ensemble1` ran with `actor_p_trajgoal/randomgoal =

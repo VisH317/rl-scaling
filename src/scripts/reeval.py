@@ -125,7 +125,13 @@ def main() -> int:
 
     dirs = ([args.run_dir] if args.run_dir
             else sorted(glob.glob(os.path.join(C.RUNS_DIR, f"{args.grid}__*"))))
-    dirs = [d for d in dirs if os.path.exists(os.path.join(d, "summary.json"))]
+    # The summary.json guard stops a GRID sweep from scoring half-trained runs by
+    # accident. Naming one directory is an explicit instruction, so it is honoured --
+    # that is how a cancelled run's best checkpoint still gets a comparable number.
+    if not args.run_dir:
+        dirs = [d for d in dirs if os.path.exists(os.path.join(d, "summary.json"))]
+    dirs = [d for d in dirs
+            if os.path.exists(os.path.join(d, "checkpoints", "params_best.pkl"))]
     if not dirs:
         print("no finished runs to re-evaluate")
         return 0

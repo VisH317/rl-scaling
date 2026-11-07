@@ -890,8 +890,14 @@ disagree in sign and all sit inside the seed spread (+0.9, −6.1, +3.4).
    retrieve better than one by cancelling independent logit noise.
 **Read:** one of E4's four confounds is closed. `phase1_repro`'s headline stands as
 written. Still open: dataset (E6), `actor_p_randomgoal` (§3 Q4), `discount`.
-**Next:** re-run `--reeval` and `plot_results` when d32 lands; §6 per-task is the
-interesting part, since the in-flight d32 already shows task 4 at 0.76 against d4's 0.08.
+**Stopped 2026-11-06 at 38% of d32 (scancel 2995193).** The three d32 seeds peaked at
+300–400k and had been flat-to-declining for 400k steps, so the remaining ~10 h bought
+confirmation rather than a result, and the GPUs were wanted for E7. `params_best.pkl`
+survived for all three seeds and was rescored at 50 episodes/task afterwards, so the
+d32 cell has a comparable headline number — read as *best checkpoint of a run stopped
+at 755k steps*, not as a converged d32. (`reeval.py` gained a one-line change for this:
+the `summary.json` guard now applies only to a `--grid` sweep, not to an explicitly
+named `--run-dir`.)
 
 **Write-up: [`results/antmaze_stitch__depth_ensemble1/README.md`](../../results/antmaze_stitch__depth_ensemble1/README.md).**
 
@@ -918,7 +924,49 @@ at ~99, this grid is uninformative and the dataset confound needs a harder varia
 **Also worth recording on its own:** stitch d4 42.7 vs navigate d4 99.6 on identical
 agent, architecture, body and maze. The difference between the two OGBench subsets is
 larger than anything depth does in either grid.
-**Next:** `2995263` (d16, d32) is queued `afterany:2995193`, ~10 h out.
+**Stopped 2026-11-06 before pack 2 ran (scancel 2995263).** d16/d32 would have cost
+~70 GPU-h for a one-sided test on the grid with the least headroom. Closed at 6 of 12
+runs by choice; d4 and d8 stand as a finished result. E7 attacks the same question
+from the humanoid side instead, where there is room to move in both directions.
+
+### E7 — humanoid_stitch1: the decisive cell of the body × data square  · submitted 2026-11-06, jobs 2995683 / 2995684
+**Question:** is the `humanoid_ensemble1` reversal about the humanoid BODY or about
+`-navigate` DATA? E6 tried this from the ant side and hit a ceiling. This tries it from
+the humanoid side, where d4 = 62.0 and d32 = 53.0 leave headroom in both directions.
+**Config:** `humanoidmaze-medium-stitch-v0`, CRL, depths 4/8/16/32, 2 seeds,
+`critic_ensemble: 1`, published flags applied (alpha 0.1, discount 0.995,
+`actor_p_trajgoal/randomgoal` 0.5/0.5). 8 runs, 71 GPU-h, ~12 h wall.
+**The fact that makes this cell worth more than E6's:** OGBench ties the goal split to
+the dataset TYPE, not the body. `hyperparameters.sh` publishes `0.5/0.5` for both
+`-stitch` sets (L166 antmaze, L296 humanoidmaze) and `1.0/0.0` for both `-navigate`
+sets (L257). So this one grid moves the dataset *and* the goal split together — the two
+remaining live confounds — while holding body, `discount` and `critic_ensemble` fixed
+against E4. It is a weaker isolation than two grids, and it is 8 runs instead of 12.
+`discount` stays uncovered because OGBench ties *that* to the body: 0.99 for every
+antmaze set, 0.995 for every humanoidmaze set.
+
+| | trajs × len | ob | goal split | discount | depth does |
+|---|---|---|---|---|---|
+| antmaze-medium-stitch (E2) | 5000 × 201 | 29 | 0.5 / 0.5 | 0.99 | **helps** 35.5 → 86.7 |
+| antmaze-medium-navigate (E6) | 1000 × 1001 | 29 | 1.0 / 0.0 | 0.99 | ceiling at d4 (99.6) |
+| humanoidmaze-med-navigate (E4) | 1000 × 2001 | 69 | 1.0 / 0.0 | 0.995 | **hurts** 62.0 → 53.0 |
+| **humanoidmaze-med-stitch (E7)** | **5000 × 401** | **69** | **0.5 / 0.5** | **0.995** | **?** |
+
+**Dataset verified before submission**, against its own npz rather than assumed from
+the generation flags: 5000 × 401 train, 500 × 401 val, ob 69, act 21, 2,005,000 rows.
+Added to `VERIFIED_DATASETS`. Generation command is `commands.sh` L60
+(`--num_episodes=5000 --max_episode_steps=401`).
+**Read:** depth helps → the body is cleared, the reversal is about `-navigate` data.
+Depth still hurts → the body is implicated and the question becomes what a 69-d
+observation and 21-d action do to contrastive depth scaling. Either way **task 4**
+settles §3 Q4 on its own: it never exceeded 0.26 on humanoid at any depth, and this is
+the first humanoid grid whose actor ever sees an out-of-trajectory goal.
+**Noted while setting this up, not acted on:** `DATASETS["humanoidmaze-medium-navigate-v0"]`
+records `traj_len=1001`, but the file is **2001** (verified: 2,001,000 rows / 1000
+trajectories). The runs were unaffected — `mode: native` loads the whole file and
+`data_info` records the truth read from disk — but `transitions_per_shard` is wrong by
+2× for that entry. Not corrected here because `size` feeds the run id, so the fix
+would re-key and orphan all 8 E4 runs. Needs a pinned `size` in the grid spec first.
 
 ---
 
